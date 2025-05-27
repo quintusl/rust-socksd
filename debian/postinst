@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create rusty-socks user and group
+        if ! getent group rusty-socks >/dev/null; then
+            addgroup --system rusty-socks
+        fi
+        
+        if ! getent passwd rusty-socks >/dev/null; then
+            adduser --system --ingroup rusty-socks --home /opt/rusty-socks \
+                    --shell /bin/false --disabled-password --disabled-login \
+                    --gecos "Rusty SOCKS proxy server" rusty-socks
+        fi
+        
+        # Set ownership and permissions
+        chown -R rusty-socks:rusty-socks /opt/rusty-socks
+        chown -R rusty-socks:rusty-socks /var/log/rusty-socks
+        chown root:rusty-socks /etc/rusty-socks/config.yml
+        chmod 640 /etc/rusty-socks/config.yml
+        
+        # Enable and start the service
+        systemctl daemon-reload
+        systemctl enable rusty-socks.service
+        
+        echo "Rusty SOCKS has been installed successfully."
+        echo "Edit /etc/rusty-socks/config.yml to configure the server."
+        echo "Start the service with: systemctl start rusty-socks"
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

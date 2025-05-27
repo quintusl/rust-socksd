@@ -1,0 +1,34 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # Stop and disable the service
+        systemctl stop rusty-socks.service || true
+        systemctl disable rusty-socks.service || true
+        systemctl daemon-reload
+        
+        # Remove user and group
+        if getent passwd rusty-socks >/dev/null; then
+            deluser rusty-socks
+        fi
+        
+        if getent group rusty-socks >/dev/null; then
+            delgroup rusty-socks
+        fi
+        
+        # Remove configuration and log directories
+        rm -rf /etc/rusty-socks
+        rm -rf /var/log/rusty-socks
+        rm -rf /opt/rusty-socks
+        ;;
+    
+    remove)
+        systemctl stop rusty-socks.service || true
+        systemctl disable rusty-socks.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

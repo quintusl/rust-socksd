@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release
+
+override_dh_auto_install:
+	install -D -m755 target/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
+	install -D -m644 rusty-socks.service debian/rusty-socks/lib/systemd/system/rusty-socks.service
+	install -D -m644 config.yml.example debian/rusty-socks/etc/rusty-socks/config.yml
+	install -d debian/rusty-socks/var/log/rusty-socks
+	install -d debian/rusty-socks/opt/rusty-socks
+
+override_dh_auto_clean:
+	cargo clean
+
+override_dh_auto_test:
+	# Skip tests for now - can be enabled later
+	# cargo test

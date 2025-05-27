@@ -1,0 +1,41 @@
+[package]
+name = "rusty-socks"
+version = "0.1.0"
+edition = "2021"
+description = "A high-performance SOCKS5 and HTTP proxy server written in Rust"
+authors = ["Quintus Leung <quintusl@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/quintusl/rusty-socks"
+keywords = ["socks5", "proxy", "http", "network", "server"]
+categories = ["network-programming", "web-programming"]
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.0", features = ["derive"] }
+bytes = "1.0"
+async-trait = "0.1"
+socket2 = "0.5"
+trust-dns-resolver = "0.23"
+base64 = "0.21"
+futures = "0.3"
+rand = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[bin]]
+name = "rusty-socks"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
