@@ -2,7 +2,8 @@ use anyhow::Result;
 use clap::{Arg, Command};
 use rusty_socks::{Config, ProxyServer};
 use tracing::{error, info, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,22 +54,28 @@ async fn main() -> Result<()> {
     
     let config = if std::path::Path::new(config_path).exists() {
         match Config::load_from_file(config_path) {
-            Ok(config) => {
+            Ok(config) => config,
+            Err(_) => Config::default()
+        }
+    } else {
+        Config::default()
+    };
+
+    let _guard = setup_logging(&config, &matches);
+    
+    if std::path::Path::new(config_path).exists() {
+        match Config::load_from_file(config_path) {
+            Ok(_) => {
                 info!("Loaded configuration from {}", config_path);
-                config
             }
             Err(e) => {
                 error!("Failed to load configuration from {}: {}", config_path, e);
                 error!("Using default configuration. Run with --generate-config to create a template.");
-                Config::default()
             }
         }
     } else {
         info!("Configuration file {} not found, using defaults", config_path);
-        Config::default()
     };
-
-    setup_logging(&config, &matches)?;
 
     info!("Starting Rusty SOCKS proxy server");
     info!("SOCKS5 will listen on {}:{}", config.server.bind_address, config.server.socks5_port);
@@ -94,7 +101,7 @@ fn generate_default_config(path: &str) -> Result<()> {
     Ok(())
 }
 
-fn setup_logging(config: &Config, matches: &clap::ArgMatches) -> Result<()> {
+fn setup_logging(config: &Config, matches: &clap::ArgMatches) -> Option<WorkerGuard>{
     let log_level = if matches.get_flag("quiet") {
         Level::ERROR
     } else {
@@ -112,15 +119,45 @@ fn setup_logging(config: &Config, matches: &clap::ArgMatches) -> Result<()> {
         }
     };
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(log_level)
-        .with_target(false)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
-        .finish();
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level.to_string()));
+    
+    let registry = tracing_subscriber::registry().with(filter);
 
-    tracing::subscriber::set_global_default(subscriber)?;
-
-    Ok(())
+    match (&config.logging.file, config.logging.console) {
+        (Some(log_file), true) => {
+            let file_appender = tracing_appender::rolling::never(
+                std::path::Path::new(log_file).parent().unwrap_or(std::path::Path::new(".")),
+                std::path::Path::new(log_file).file_name().unwrap()
+            );
+            let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+            
+            registry
+                .with(fmt::layer().with_writer(std::io::stdout))
+                .with(fmt::layer().with_writer(non_blocking_file).with_ansi(false))
+                .init();
+            Some(guard) 
+        },
+        (Some(log_file), false) => {
+            let file_appender = tracing_appender::rolling::never(
+                std::path::Path::new(log_file).parent().unwrap_or(std::path::Path::new(".")),
+                std::path::Path::new(log_file).file_name().unwrap()
+            );
+            let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+            
+            registry
+                .with(fmt::layer().with_writer(non_blocking_file).with_ansi(false))
+                .init();
+            Some(guard) 
+        },
+        (None, true) => {
+            registry
+                .with(fmt::layer().with_writer(std::io::stdout))
+                .init();
+            None
+        },
+        (None, false) => {
+            None 
+        }
+    }
 }
