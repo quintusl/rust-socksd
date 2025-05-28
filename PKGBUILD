@@ -36,7 +36,7 @@ package() {
     
     # Create directories
     install -dm755 "$pkgdir/var/log/rusty-socks"
-    install -dm755 "$pkgdir/opt/rusty-socks"
+    install -dm755 "$pkgdir/var/run/rusty-socks"
     
     # Install documentation
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

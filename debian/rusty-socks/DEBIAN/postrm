@@ -29,6 +29,18 @@ case "$1" in
         ;;
 esac
 
-#DEBHELPER#
+# Automatically added by dh_installsystemd/13.11.4
+if [ "$1" = remove ] && [ -d /run/systemd/system ] ; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.11.4
+if [ "$1" = "purge" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper purge 'rusty-socks.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+
 
 exit 0

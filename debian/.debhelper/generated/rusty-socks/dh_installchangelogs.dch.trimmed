@@ -1,0 +1,12 @@
+rusty-socks (0.1.0-1) unstable; urgency=medium
+
+  * Initial release of Rusty SOCKS proxy server
+  * Full SOCKS5 protocol implementation with authentication support
+  * HTTP proxy functionality with CONNECT method
+  * Multi-threaded async architecture using tokio
+  * YAML configuration system with validation
+  * Systemd service integration
+  * Comprehensive security features and logging
+  * Debian packaging and Arch AUR support
+
+ -- Quintus Leung <quintusl@gmail.com>  Tue, 27 May 2025 12:00:00 +0000

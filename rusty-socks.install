@@ -1,10 +1,10 @@
 post_install() {
     # Create rusty-socks user and group
     getent group rusty-socks &>/dev/null || groupadd -r rusty-socks
-    getent passwd rusty-socks &>/dev/null || useradd -r -g rusty-socks -d /opt/rusty-socks -s /usr/bin/nologin -c "Rusty SOCKS proxy server" rusty-socks
+    getent passwd rusty-socks &>/dev/null || useradd -r -g rusty-socks -d /var/run/rusty-socks -s /usr/bin/nologin -c "Rusty SOCKS proxy server" rusty-socks
     
     # Set ownership and permissions
-    chown -R rusty-socks:rusty-socks /opt/rusty-socks
+    chown -R rusty-socks:rusty-socks /var/run/rusty-socks
     chown -R rusty-socks:rusty-socks /var/log/rusty-socks
     chown root:rusty-socks /etc/rusty-socks/config.yml
     chmod 640 /etc/rusty-socks/config.yml
@@ -39,7 +39,7 @@ post_remove() {
     
     # Remove directories (but preserve configuration)
     rm -rf /var/log/rusty-socks
-    rm -rf /opt/rusty-socks
+    rm -rf /var/run/rusty-socks
     
     echo "Rusty SOCKS has been removed."
     echo "Configuration files in /etc/rusty-socks have been preserved."
