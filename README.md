@@ -86,18 +86,65 @@ logging:
 
 ### Authentication
 
-To enable authentication:
+Rusty SOCKS supports secure username/password authentication using separate configuration files for enhanced security. Users are managed through dedicated CLI commands with secure password hashing.
+
+#### Enabling Authentication
+
+To enable authentication in your main configuration:
 
 ```yaml
 auth:
   enabled: true
   method: "username_password"
-  users:
-    - username: "user1"
-      password: "password1"
-    - username: "admin"
-      password: "secure_password"
+  user_config_file: "users.yml"
 ```
+
+#### User Management
+
+Users are managed separately from the main configuration using the `user` subcommand:
+
+##### Initialize User Configuration
+```bash
+# Create a new user configuration file
+rusty-socks user init --user-config users.yml --hash-type argon2
+```
+
+##### Add Users
+```bash
+# Add a new user (will prompt for password)
+rusty-socks user add --user-config users.yml username
+
+# Add user with password specified
+rusty-socks user add --user-config users.yml username password
+
+# Specify hash type (argon2, bcrypt, scrypt)
+rusty-socks user add --user-config users.yml --hash-type bcrypt username
+```
+
+##### Manage Existing Users
+```bash
+# List all users
+rusty-socks user list --user-config users.yml
+
+# Update user password
+rusty-socks user update --user-config users.yml username
+
+# Enable/disable a user
+rusty-socks user enable --user-config users.yml username true
+rusty-socks user enable --user-config users.yml username false
+
+# Remove a user
+rusty-socks user remove --user-config users.yml username
+```
+
+#### Password Security
+
+Rusty SOCKS uses secure password hashing with support for:
+- **Argon2** (default, recommended)
+- **bcrypt** 
+- **scrypt**
+
+Passwords are never stored in plain text and use cryptographically secure salt generation.
 
 ### Security
 
@@ -143,8 +190,10 @@ curl --proxy localhost:8080 https://httpbin.org/ip
 
 ## Command Line Options
 
+### Main Command
+
 ```
-rusty-socks [OPTIONS]
+rusty-socks [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
     -c, --config <FILE>              Configuration file path [default: config.yml]
@@ -153,6 +202,117 @@ OPTIONS:
     -q, --quiet                      Suppress all output except errors
     -h, --help                       Print help information
     -V, --version                    Print version information
+
+SUBCOMMANDS:
+    validate                         Validate configuration files
+    user                            User management commands
+```
+
+### Validation Subcommand
+
+Validate configuration files for syntax and consistency:
+
+```
+rusty-socks validate [OPTIONS]
+
+OPTIONS:
+    -c, --config <FILE>              Configuration file to validate [default: config.yml]
+        --user-config <FILE>         User configuration file to validate
+```
+
+Examples:
+```bash
+# Validate main configuration
+rusty-socks validate
+
+# Validate specific config files
+rusty-socks validate --config /etc/rusty-socks/config.yml --user-config /etc/rusty-socks/users.yml
+```
+
+### User Management Subcommand
+
+Manage user accounts with secure password hashing:
+
+```
+rusty-socks user [OPTIONS] <SUBCOMMAND>
+
+OPTIONS:
+        --user-config <FILE>         User configuration file path [default: users.yml]
+
+SUBCOMMANDS:
+    init                            Initialize a new user configuration file
+    add                             Add a new user
+    remove                          Remove a user
+    list                            List all users
+    update                          Update user password
+    enable                          Enable/disable a user
+```
+
+#### User Subcommand Details
+
+##### Initialize User Config
+```
+rusty-socks user init [OPTIONS]
+
+OPTIONS:
+        --hash-type <TYPE>           Default password hash type: argon2, bcrypt, scrypt [default: argon2]
+        --user-config <FILE>         User configuration file path [default: users.yml]
+```
+
+##### Add User
+```
+rusty-socks user add [OPTIONS] <USERNAME> [PASSWORD]
+
+ARGUMENTS:
+    <USERNAME>                       Username
+    [PASSWORD]                       Password (will prompt if not provided)
+
+OPTIONS:
+        --hash-type <TYPE>           Password hash type: argon2, bcrypt, scrypt [default: argon2]
+        --user-config <FILE>         User configuration file path [default: users.yml]
+```
+
+##### Remove User
+```
+rusty-socks user remove [OPTIONS] <USERNAME>
+
+ARGUMENTS:
+    <USERNAME>                       Username to remove
+
+OPTIONS:
+        --user-config <FILE>         User configuration file path [default: users.yml]
+```
+
+##### List Users
+```
+rusty-socks user list [OPTIONS]
+
+OPTIONS:
+        --user-config <FILE>         User configuration file path [default: users.yml]
+```
+
+##### Update User Password
+```
+rusty-socks user update [OPTIONS] <USERNAME> [PASSWORD]
+
+ARGUMENTS:
+    <USERNAME>                       Username
+    [PASSWORD]                       New password (will prompt if not provided)
+
+OPTIONS:
+        --user-config <FILE>         User configuration file path [default: users.yml]
+```
+
+##### Enable/Disable User
+```
+rusty-socks user enable [OPTIONS] <USERNAME> <ENABLED>
+
+ARGUMENTS:
+    <USERNAME>                       Username
+    <ENABLED>                        Enable (true) or disable (false)
+
+OPTIONS:
+        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ## Systemd Service
