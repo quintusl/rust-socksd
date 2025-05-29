@@ -8,7 +8,7 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	install -D -m755 target/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
-	install -D -m644 rusty-socks.service debian/rusty-socks/lib/systemd/system/rusty-socks.service
+	install -D -m644 config/rusty-socks.service debian/rusty-socks/lib/systemd/system/rusty-socks.service
 	install -D -m640 config/config.yml.journald.example debian/rusty-socks/etc/rusty-socks/config.yml
 	install -D -m660 config/users.yml.example debian/rusty-socks/etc/rusty-socks/users.yml
 	install -d debian/rusty-socks/var/log/rusty-socks

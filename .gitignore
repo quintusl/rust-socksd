@@ -32,6 +32,6 @@ debhelper-build-stamp
 *.tar.gz
 *.log
 *.substvars
-/.vagrant
-/*/debian/rusty-socks
-/*/debian/files
+.vagrant
+debian/rusty-socks
+debian/files
