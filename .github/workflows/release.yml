@@ -12,7 +12,6 @@ jobs:
     permissions:
       contents: write # Required to create releases and upload assets
     outputs:
-      upload_url: ${{ steps.create_release_step.outputs.upload_url }}
       version: ${{ env.VERSION }}
       tag_name: ${{ github.ref_name }}
     steps:
@@ -25,18 +24,16 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release_step
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          body: |
-            Automated release for rusty-socks version ${{ env.VERSION }}.
-            See CHANGELOG.md for details (if available).
-            Assets will be uploaded by subsequent jobs.
-          draft: false # Set to true for initial testing, then false when confident
-          prerelease: false # Set to true if this is a pre-release
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Automated release for rusty-socks version ${{ env.VERSION }}.
+          See CHANGELOG.md for details (if available).
+          Assets will be uploaded by subsequent jobs." \
+            --draft=false \
+            --prerelease=false
 
   build_and_upload_source_archive:
     name: Build and Upload Source Archive
@@ -65,14 +62,10 @@ jobs:
           ls -lh "${ARCHIVE_NAME}"
 
       - name: Upload source archive to release
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_gh_release.outputs.upload_url }}
-          asset_path: ${{ env.ARCHIVE_PATH }}
-          asset_name: ${{ env.ARCHIVE_NAME }}
-          asset_content_type: application/gzip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.ARCHIVE_PATH }}"
 
   build_debian_packages:
     name: Build Debian Package (${{ matrix.arch }})
@@ -103,7 +96,6 @@ jobs:
       - name: Install Rust toolchain for target ${{ matrix.target }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable # You can pin this, e.g., 1.77, if needed
           targets: ${{ matrix.target }}
 
       - name: Install cargo-deb
@@ -144,11 +136,7 @@ jobs:
           ls -lh "$DEB_PATH"
 
       - name: Upload Debian package to release
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_gh_release.outputs.upload_url }}
-          asset_path: ${{ env.DEB_PATH }}
-          asset_name: ${{ env.DEB_NAME }}
-          asset_content_type: application/vnd.debian.binary-package
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.DEB_PATH }}"
