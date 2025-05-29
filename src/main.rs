@@ -46,6 +46,24 @@ async fn main() -> Result<()> {
                 .conflicts_with("verbose"),
         )
         .subcommand(
+            Command::new("validate")
+                .about("Validate configuration files")
+                .arg(
+                    Arg::new("config")
+                        .short('c')
+                        .long("config")
+                        .value_name("FILE")
+                        .help("Configuration file to validate")
+                        .default_value("config.yml"),
+                )
+                .arg(
+                    Arg::new("user-config")
+                        .long("user-config")
+                        .value_name("FILE")
+                        .help("User configuration file to validate"),
+                ),
+        )
+        .subcommand(
             Command::new("user")
                 .about("User management commands")
                 .arg(
@@ -138,6 +156,11 @@ async fn main() -> Result<()> {
 
     if let Some(config_path) = matches.get_one::<String>("generate-config") {
         generate_default_config(config_path)?;
+        return Ok(());
+    }
+
+    if let Some(validate_matches) = matches.subcommand_matches("validate") {
+        handle_validate_command(validate_matches)?;
         return Ok(());
     }
 
@@ -403,6 +426,55 @@ fn enable_user(path: &str, username: &str, enabled: bool) -> Result<()> {
 
     let status = if enabled { "enabled" } else { "disabled" };
     println!("User {} {}", username, status);
+
+    Ok(())
+}
+
+fn handle_validate_command(matches: &ArgMatches) -> Result<()> {
+    let config_path = matches.get_one::<String>("config").unwrap();
+    let user_config_path = matches.get_one::<String>("user-config");
+
+    let mut has_errors = false;
+
+    println!("Validating configuration files...");
+
+    if std::path::Path::new(config_path).exists() {
+        print!("Validating main config file '{}': ", config_path);
+        match Config::load_from_file(config_path) {
+            Ok(_) => {
+                println!("✓ Valid");
+            }
+            Err(e) => {
+                println!("✗ Invalid - {}", e);
+                has_errors = true;
+            }
+        }
+    } else {
+        println!("⚠ Main config file '{}' does not exist", config_path);
+    }
+
+    if let Some(user_config_path) = user_config_path {
+        if std::path::Path::new(user_config_path).exists() {
+            print!("Validating user config file '{}': ", user_config_path);
+            match UserConfig::load_from_file(user_config_path) {
+                Ok(_) => {
+                    println!("✓ Valid");
+                }
+                Err(e) => {
+                    println!("✗ Invalid - {}", e);
+                    has_errors = true;
+                }
+            }
+        } else {
+            println!("⚠ User config file '{}' does not exist", user_config_path);
+        }
+    }
+
+    if has_errors {
+        std::process::exit(1);
+    } else {
+        println!("All configuration files are valid!");
+    }
 
     Ok(())
 }
