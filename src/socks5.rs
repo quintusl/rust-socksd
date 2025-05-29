@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use bytes::{BufMut, BytesMut};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
+
+use crate::Config;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AuthMethod {
@@ -126,9 +129,14 @@ impl Socks5Response {
     }
 }
 
-pub struct Socks5Handler;
+pub struct Socks5Handler {
+    config: Arc<Config>,
+}
 
 impl Socks5Handler {
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
+    }
     pub async fn handle_handshake<T>(&self, stream: &mut T, auth_required: bool) -> Result<bool>
     where
         T: AsyncRead + AsyncWrite + Unpin,
@@ -221,8 +229,14 @@ impl Socks5Handler {
         }
     }
     
-    fn validate_credentials(&self, _username: &str, _password: &str) -> bool {
-        true
+    fn validate_credentials(&self, username: &str, password: &str) -> bool {
+        match self.config.validate_user(username, password) {
+            Ok(valid) => valid,
+            Err(e) => {
+                warn!("Authentication error for user '{}': {}", username, e);
+                false
+            }
+        }
     }
     
     pub async fn handle_request<T>(&self, stream: &mut T) -> Result<Socks5Request>

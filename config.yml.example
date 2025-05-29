@@ -28,12 +28,8 @@ auth:
   # Authentication method: "none" or "username_password"
   method: "none"
   
-  # User credentials (only used if auth is enabled)
-  users:
-    - username: "user1"
-      password: "password1"
-    - username: "admin"
-      password: "secure_password"
+  # Path to user configuration file (required if auth is enabled)
+  user_config_file: "users.yml"
 
 # Logging configuration
 logging:

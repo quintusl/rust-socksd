@@ -27,6 +27,10 @@ trust-dns-resolver = "0.23"
 base64 = "0.21"
 futures = "0.3"
 rand = "0.8"
+argon2 = "0.5"
+bcrypt = "0.15"
+scrypt = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

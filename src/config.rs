@@ -4,6 +4,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 use tracing::info;
 
+mod user_config;
+pub use user_config::{UserConfig, HashType};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub server: ServerConfig,
@@ -26,7 +29,7 @@ pub struct ServerConfig {
 pub struct AuthConfig {
     pub enabled: bool,
     pub method: AuthMethod,
-    pub users: Vec<UserCredentials>,
+    pub user_config_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,11 +40,6 @@ pub enum AuthMethod {
     UsernamePassword,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserCredentials {
-    pub username: String,
-    pub password: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
@@ -78,7 +76,7 @@ impl Default for Config {
             auth: AuthConfig {
                 enabled: false,
                 method: AuthMethod::None,
-                users: vec![],
+                user_config_file: None,
             },
             logging: LoggingConfig {
                 level: "info".to_string(),
@@ -103,78 +101,83 @@ impl Config {
         info!("Configuration loaded successfully");
         Ok(config)
     }
-    
+
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = serde_yaml::to_string(self)?;
         std::fs::write(path, content)?;
         Ok(())
     }
-    
+
     pub fn validate(&self) -> Result<()> {
         if self.server.socks5_port == 0 {
             return Err(anyhow!("Invalid SOCKS5 port: {}", self.server.socks5_port));
         }
-        
+
         if self.server.http_port == 0 {
             return Err(anyhow!("Invalid HTTP port: {}", self.server.http_port));
         }
-        
+
         if self.server.socks5_port == self.server.http_port {
             return Err(anyhow!("SOCKS5 and HTTP ports cannot be the same"));
         }
-        
+
         self.server.bind_address.parse::<std::net::IpAddr>()
             .map_err(|_| anyhow!("Invalid bind address: {}", self.server.bind_address))?;
-        
+
         if self.server.max_connections == 0 {
             return Err(anyhow!("Max connections must be greater than 0"));
         }
-        
+
         if self.server.buffer_size < 1024 {
             return Err(anyhow!("Buffer size must be at least 1024 bytes"));
         }
-        
-        if self.auth.enabled && self.auth.users.is_empty() {
-            return Err(anyhow!("Authentication enabled but no users configured"));
+
+        if self.auth.enabled && self.auth.user_config_file.is_none() {
+            return Err(anyhow!("Authentication enabled but no user config file specified"));
         }
-        
-        for user in &self.auth.users {
-            if user.username.is_empty() || user.password.is_empty() {
-                return Err(anyhow!("Username and password cannot be empty"));
-            }
-        }
-        
+
         for network in &self.security.allowed_networks {
             if !network.contains('/') {
                 network.parse::<std::net::IpAddr>()
                     .map_err(|_| anyhow!("Invalid network address: {}", network))?;
             }
         }
-        
+
         if !["trace", "debug", "info", "warn", "error"].contains(&self.logging.level.as_str()) {
             return Err(anyhow!("Invalid log level: {}", self.logging.level));
         }
-        
+
         Ok(())
     }
-    
+
     pub fn socks5_bind_addr(&self) -> Result<SocketAddr> {
         let addr = format!("{}:{}", self.server.bind_address, self.server.socks5_port);
         addr.parse().map_err(|e| anyhow!("Failed to parse SOCKS5 bind address: {}", e))
     }
-    
+
     pub fn http_bind_addr(&self) -> Result<SocketAddr> {
         let addr = format!("{}:{}", self.server.bind_address, self.server.http_port);
         addr.parse().map_err(|e| anyhow!("Failed to parse HTTP bind address: {}", e))
     }
-    
-    pub fn validate_user(&self, username: &str, password: &str) -> bool {
+
+    pub fn validate_user(&self, username: &str, password: &str) -> Result<bool> {
         if !self.auth.enabled {
-            return true;
+            return Ok(true);
         }
-        
-        self.auth.users.iter().any(|user| {
-            user.username == username && user.password == password
-        })
+
+        if let Some(user_config_path) = &self.auth.user_config_file {
+            let user_config = UserConfig::load_from_file(user_config_path)?;
+            Ok(user_config.verify_password(username, password))
+        } else {
+            Err(anyhow!("Authentication enabled but no user config file specified"))
+        }
+    }
+
+    pub fn load_user_config(&self) -> Result<Option<UserConfig>> {
+        if let Some(user_config_path) = &self.auth.user_config_file {
+            Ok(Some(UserConfig::load_from_file(user_config_path)?))
+        } else {
+            Ok(None)
+        }
     }
 }

@@ -149,7 +149,7 @@ impl ProxyServer {
     }
     
     async fn handle_socks5_connection(mut stream: TcpStream, config: Arc<Config>) -> Result<()> {
-        let handler = Socks5Handler;
+        let handler = Socks5Handler::new(config.clone());
         
         let auth_required = config.auth.enabled;
         if !handler.handle_handshake(&mut stream, auth_required).await? {
