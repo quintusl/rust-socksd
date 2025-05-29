@@ -18,5 +18,20 @@ target/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
+# Debian
+debhelper-build-stamp
+.DS_Store
+.debhelper
+*.deb
+*.dsc
+*.build
+*.buildinfo
+*.changes
+*.tar.gz
+*.log
+*.substvars
+/.vagrant
+/*/debian/rusty-socks
+/*/debian/files

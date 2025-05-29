@@ -29,11 +29,11 @@ package() {
     install -Dm755 target/release/rusty-socks "$pkgdir/usr/bin/rusty-socks"
 
     # Install systemd service
-    install -Dm644 rusty-socks.service "$pkgdir/usr/lib/systemd/system/rusty-socks.service"
+    install -Dm644 config/rusty-socks.service "$pkgdir/usr/lib/systemd/system/rusty-socks.service"
 
     # Install configuration
-    install -Dm644 config.yml.example "$pkgdir/etc/rusty-socks/config.yml"
-    install -Dm664 users.yml.example "$pkgdir/etc/rusty-socks/users.yml"
+    install -Dm644 config/config.yml.journald.example "$pkgdir/etc/rusty-socks/config.yml"
+    install -Dm664 config/users.yml.example "$pkgdir/etc/rusty-socks/users.yml"
 
     # Create directories
     install -dm755 "$pkgdir/var/log/rusty-socks"

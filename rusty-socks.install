@@ -8,6 +8,8 @@ post_install() {
     chown -R rusty-socks:rusty-socks /var/log/rusty-socks
     chown root:rusty-socks /etc/rusty-socks/config.yml
     chmod 640 /etc/rusty-socks/config.yml
+    chown root:rusty-socks /etc/rusty-socks/users.yml
+    chmod 660 /etc/rusty-socks/users.yml
     
     # Enable the service
     systemctl daemon-reload
