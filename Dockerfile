@@ -44,16 +44,22 @@ RUN chmod +x /usr/local/bin/rusty-socks
 
 # Expose the default SOCKS5 port
 EXPOSE 1080
+# Consider exposing the HTTP port if it's commonly used and has a fixed default
+# EXPOSE 8080
 
 # Switch to the non-root user
 USER appuser
 
 # Set default environment variables for rusty-socks configuration.
-# Assumes rusty-socks reads these (e.g., via clap with 'env' feature).
+# Assumes rusty-socks reads these.
 
 # Listen on all interfaces inside the container
-ENV RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0:1080"
-# Default log level
+ENV RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0"
+# Default SOCKS5 port
+ENV RUSTY_SOCKS_SOCKS5_PORT="1080"
+# Default HTTP port (adjust if needed)
+ENV RUSTY_SOCKS_HTTP_PORT="8080"
+# Log level
 ENV RUSTY_SOCKS_LOG_LEVEL="info"
 
 # Default command to run the application

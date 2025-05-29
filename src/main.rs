@@ -45,6 +45,34 @@ async fn main() -> Result<()> {
                 .help("Suppress all output except errors")
                 .conflicts_with("verbose"),
         )
+        .arg(
+            Arg::new("bind")
+                .short('b')
+                .long("bind")
+                .value_name("ADDRESS")
+                .help("Bind address (can also be set via RUSTY_SOCKS_BIND_ADDRESS)"),
+        )
+        .arg(
+            Arg::new("http-port")
+                .short('p')
+                .long("http-port")
+                .value_name("PORT")
+                .help("HTTP proxy port (can also be set via RUSTY_SOCKS_HTTP_PORT)"),
+        )
+        .arg(
+            Arg::new("socks5-port")
+                .short('s')
+                .long("socks5-port")
+                .value_name("PORT")
+                .help("SOCKS5 proxy port (can also be set via RUSTY_SOCKS_SOCKS5_PORT)"),
+        )
+        .arg(
+            Arg::new("loglevel")
+                .short('l')
+                .long("loglevel")
+                .value_name("LEVEL")
+                .help("Log level: trace, debug, info, warn, error (can also be set via RUSTY_SOCKS_LOG_LEVEL)"),
+        )
         .subcommand(
             Command::new("validate")
                 .about("Validate configuration files")
@@ -171,7 +199,7 @@ async fn main() -> Result<()> {
 
     let config_path = matches.get_one::<String>("config").unwrap();
 
-    let config = if std::path::Path::new(config_path).exists() {
+    let mut config = if std::path::Path::new(config_path).exists() {
         match Config::load_from_file(config_path) {
             Ok(config) => config,
             Err(_) => Config::default()
@@ -179,6 +207,39 @@ async fn main() -> Result<()> {
     } else {
         Config::default()
     };
+
+    // Apply CLI/environment overrides
+    if let Some(bind_address) = matches.get_one::<String>("bind") {
+        config.server.bind_address = bind_address.clone();
+    } else if let Ok(bind_address) = std::env::var("RUSTY_SOCKS_BIND_ADDRESS") {
+        config.server.bind_address = bind_address;
+    }
+    
+    if let Some(http_port) = matches.get_one::<String>("http-port") {
+        if let Ok(port) = http_port.parse::<u16>() {
+            config.server.http_port = port;
+        }
+    } else if let Ok(http_port) = std::env::var("RUSTY_SOCKS_HTTP_PORT") {
+        if let Ok(port) = http_port.parse::<u16>() {
+            config.server.http_port = port;
+        }
+    }
+    
+    if let Some(socks5_port) = matches.get_one::<String>("socks5-port") {
+        if let Ok(port) = socks5_port.parse::<u16>() {
+            config.server.socks5_port = port;
+        }
+    } else if let Ok(socks5_port) = std::env::var("RUSTY_SOCKS_SOCKS5_PORT") {
+        if let Ok(port) = socks5_port.parse::<u16>() {
+            config.server.socks5_port = port;
+        }
+    }
+    
+    if let Some(log_level) = matches.get_one::<String>("loglevel") {
+        config.logging.level = log_level.clone();
+    } else if let Ok(log_level) = std::env::var("RUSTY_SOCKS_LOG_LEVEL") {
+        config.logging.level = log_level;
+    }
 
     let _guard = setup_logging(&config, &matches);
 
