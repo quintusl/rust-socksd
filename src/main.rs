@@ -4,7 +4,8 @@ use rusty_socks::{Config, ProxyServer, UserConfig, HashType};
 use std::io::{self, Write};
 use tracing::{error, info, Level};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_journald;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -217,44 +218,51 @@ fn setup_logging(config: &Config, matches: &clap::ArgMatches) -> Option<WorkerGu
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(log_level.to_string()));
 
-    let registry = tracing_subscriber::registry().with(filter);
+    // start collecting layers
+    let mut layers = vec![];
 
-    match (&config.logging.file, config.logging.console) {
-        (Some(log_file), true) => {
-            let file_appender = tracing_appender::rolling::never(
-                std::path::Path::new(log_file).parent().unwrap_or(std::path::Path::new(".")),
-                std::path::Path::new(log_file).file_name().unwrap()
-            );
-            let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+    let registry = tracing_subscriber::registry();
+    let mut guard = None;
 
-            registry
-                .with(fmt::layer().with_writer(std::io::stdout))
-                .with(fmt::layer().with_writer(non_blocking_file).with_ansi(false))
-                .init();
-            Some(guard)
-        },
-        (Some(log_file), false) => {
-            let file_appender = tracing_appender::rolling::never(
-                std::path::Path::new(log_file).parent().unwrap_or(std::path::Path::new(".")),
-                std::path::Path::new(log_file).file_name().unwrap()
-            );
-            let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
+    // Add console logging layer
+    if config.logging.console {
+        let console_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
+            .with_ansi(true)
+            .boxed();
+        layers.push(console_layer);
+    }
 
-            registry
-                .with(fmt::layer().with_writer(non_blocking_file).with_ansi(false))
-                .init();
-            Some(guard)
-        },
-        (None, true) => {
-            registry
-                .with(fmt::layer().with_writer(std::io::stdout))
-                .init();
-            None
-        },
-        (None, false) => {
-            None
+    // Add file logging layer
+    if let Some(log_file) = &config.logging.file {
+        let file_appender = tracing_appender::rolling::never(
+            std::path::Path::new(log_file).parent().unwrap_or(std::path::Path::new(".")),
+            std::path::Path::new(log_file).file_name().unwrap()
+        );
+        let (non_blocking_file, file_guard) = tracing_appender::non_blocking(file_appender);
+        guard = Some(file_guard);
+        let file_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
+            .with_writer(non_blocking_file)
+            .with_ansi(false)
+            .boxed();
+        layers.push(file_layer);
+    }
+
+    // Add journald logging layer
+    if config.logging.journald {
+        match tracing_journald::layer() {
+            Ok(journald_layer) => {
+                layers.push(journald_layer.boxed());
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to initialize journald logging: {}", e);
+            }
         }
     }
+    registry
+        .with(layers)
+        .with(filter)
+        .init();
+    guard
 }
 
 fn handle_user_command(matches: &ArgMatches) -> Result<()> {

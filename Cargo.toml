@@ -19,6 +19,7 @@ thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+tracing-journald = "0.3"
 clap = { version = "4.0", features = ["derive"] }
 bytes = "1.0"
 async-trait = "0.1"

@@ -11,6 +11,7 @@ Vcs-Browser: https://github.com/quintusl/rusty-socks
 Package: rusty-socks
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Recommends: systemd
 Description: High-performance SOCKS5 and HTTP proxy server
  Rusty SOCKS is a modern, high-performance proxy server written in Rust
  that supports both SOCKS5 and HTTP proxy protocols. It features:
@@ -19,7 +20,7 @@ Description: High-performance SOCKS5 and HTTP proxy server
   * HTTP proxy with CONNECT method support
   * Multi-threaded async architecture using tokio
   * YAML-based configuration
-  * Comprehensive logging and monitoring
+  * Comprehensive logging and monitoring (console, file, journald)
   * Security features and access controls
  .
  This package is suitable for personal use, corporate networks, and

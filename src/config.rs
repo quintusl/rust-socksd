@@ -46,6 +46,7 @@ pub struct LoggingConfig {
     pub level: String,
     pub file: Option<String>,
     pub console: bool,
+    pub journald: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +83,7 @@ impl Default for Config {
                 level: "info".to_string(),
                 file: None,
                 console: true,
+                journald: false,
             },
             security: SecurityConfig {
                 allowed_networks: vec!["0.0.0.0/0".to_string()],

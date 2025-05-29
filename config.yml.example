@@ -4,19 +4,19 @@
 server:
   # IP address to bind to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
   bind_address: "127.0.0.1"
-  
+
   # Port for SOCKS5 proxy
   socks5_port: 1080
-  
+
   # Port for HTTP proxy
   http_port: 8080
-  
+
   # Maximum number of concurrent connections
   max_connections: 1000
-  
+
   # Connection timeout in seconds
   connection_timeout: 300
-  
+
   # Buffer size for data transfer (in bytes)
   buffer_size: 65536
 
@@ -24,10 +24,10 @@ server:
 auth:
   # Enable authentication (true/false)
   enabled: false
-  
+
   # Authentication method: "none" or "username_password"
   method: "none"
-  
+
   # Path to user configuration file (required if auth is enabled)
   user_config_file: "users.yml"
 
@@ -35,12 +35,15 @@ auth:
 logging:
   # Log level: trace, debug, info, warn, error
   level: "info"
-  
+
   # Log file path (optional, set to null to disable file logging)
   file: "/var/log/rusty-socks/rusty-socks.log"
-  
+
   # Enable console logging
-  console: true
+  console: false
+
+  # Enable systemd journald logging (Linux only)
+  journald: false
 
 # Security settings
 security:
@@ -50,15 +53,15 @@ security:
     # - "10.0.0.0/8"
     # - "192.168.0.0/16"
     # - "172.16.0.0/12"
-  
+
   # Blocked domains (exact matches)
   blocked_domains:
     - "malicious-site.com"
     - "blocked-domain.net"
-  
+
   # Maximum request size in bytes
   max_request_size: 1048576  # 1MB
-  
+
   # Rate limiting (optional)
   rate_limit:
     requests_per_minute: 1000
