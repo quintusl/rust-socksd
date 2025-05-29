@@ -21,7 +21,7 @@ jobs:
 
       - name: Get version from tag
         id: get_version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV # Example: v1.0.0 -> 1.0.0
+        run: echo "VERSION=\"${GITHUB_REF_NAME#v}\"" >> $GITHUB_ENV # Example: v1.0.0 -> 1.0.0
 
       - name: Create GitHub Release
         id: create_release_step
@@ -59,8 +59,8 @@ jobs:
           ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}.tar.gz"
           # Create archive from the tagged commit, ensuring it extracts to a versioned directory
           git archive --format=tar.gz --prefix="${PROJECT_NAME}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
-          echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
-          echo "ARCHIVE_PATH=${PWD}/${ARCHIVE_NAME}" >> $GITHUB_ENV
+          echo "ARCHIVE_NAME=\"${ARCHIVE_NAME}\"" >> $GITHUB_ENV
+          echo "ARCHIVE_PATH=\"${PWD}/${ARCHIVE_NAME}\"" >> $GITHUB_ENV
           echo "Created archive: ${ARCHIVE_NAME}"
           ls -lh "${ARCHIVE_NAME}"
 
@@ -139,8 +139,8 @@ jobs:
             exit 1
           fi
           echo "Found deb package: $DEB_PATH"
-          echo "DEB_PATH=${DEB_PATH}" >> $GITHUB_ENV
-          echo "DEB_NAME=$(basename "${DEB_PATH}")" >> $GITHUB_ENV
+          echo "DEB_PATH=\"${DEB_PATH}\"" >> $GITHUB_ENV
+          echo "DEB_NAME=\"\$(basename \"${DEB_PATH}\")\"" >> $GITHUB_ENV
           ls -lh "$DEB_PATH"
 
       - name: Upload Debian package to release
