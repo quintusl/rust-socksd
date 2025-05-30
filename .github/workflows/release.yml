@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write # Required to create releases and upload assets
     outputs:
-      version: ${{ env.VERSION }}
+      version: ${{ steps.get_version.outputs.version }}
       tag_name: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
@@ -20,12 +20,14 @@ jobs:
 
       - name: Get version from tag
         id: get_version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV # Example: v1.0.0 -> 1.0.0
+        # Example: v1.0.0 -> 1.0.0
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         id: create_release_step
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           gh release create ${{ github.ref_name }} \
             --title "Release ${{ github.ref_name }}" \
@@ -48,6 +50,7 @@ jobs:
           fetch-depth: 0 # Required by git archive to correctly use the tag
 
       - name: Create source archive
+        id: create_source_archive
         env:
           VERSION: ${{ needs.create_gh_release.outputs.version }}
           TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
@@ -56,14 +59,14 @@ jobs:
           ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}.tar.gz"
           # Create archive from the tagged commit, ensuring it extracts to a versioned directory
           git archive --format=tar.gz --prefix="${PROJECT_NAME}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
-          echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
-          echo "ARCHIVE_PATH=${PWD}/${ARCHIVE_NAME}" >> $GITHUB_ENV
+          echo "archive_path=${PWD}/${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           echo "Created archive: ${ARCHIVE_NAME}"
           ls -lh "${ARCHIVE_NAME}"
 
       - name: Upload source archive to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARCHIVE_PATH: ${{ steps.create_source_archive.outputs.archive_path }}
         run: |
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.ARCHIVE_PATH }}"
 
@@ -105,7 +108,7 @@ jobs:
         if: matrix.arch == 'arm64'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev:arm64
 
       - name: Configure linker for cross-compilation (for arm64)
         if: matrix.linker != '' && matrix.linker != null
@@ -131,12 +134,12 @@ jobs:
             exit 1
           fi
           echo "Found deb package: $DEB_PATH"
-          echo "DEB_PATH=${DEB_PATH}" >> $GITHUB_ENV
-          echo "DEB_NAME=\$(basename \"${DEB_PATH}\")" >> $GITHUB_ENV
+          echo "deb_path=${DEB_PATH}" >> $GITHUB_OUTPUT
           ls -lh "$DEB_PATH"
 
       - name: Upload Debian package to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEB_PATH: ${{ steps.package_info.outputs.deb_path }}
         run: |
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.DEB_PATH }}"
