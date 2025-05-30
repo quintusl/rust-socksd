@@ -55,7 +55,7 @@ jobs:
           VERSION: ${{ needs.create_gh_release.outputs.version }}
           TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
         run: |
-          PROJECT_NAME=$(grep '^name *=' Cargo.toml | sed 's/name *= *"\(.*\)"/\1/')
+          PROJECT_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
           ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}.tar.gz"
           # Create archive from the tagged commit, ensuring it extracts to a versioned directory
           git archive --format=tar.gz --prefix="${PROJECT_NAME}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
@@ -67,6 +67,7 @@ jobs:
           fi
           ls -lh "${ARCHIVE_NAME}"
           exit 0
+
       - name: Upload source archive to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
