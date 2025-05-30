@@ -61,8 +61,12 @@ jobs:
           git archive --format=tar.gz --prefix="${PROJECT_NAME}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
           echo "archive_path=${PWD}/${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           echo "Created archive: ${ARCHIVE_NAME}"
+          if [ -z "${PWD}/${ARCHIVE_NAME}" ]; then
+            echo "::error::Archive path is empty. Check if the archive was created successfully."
+            exit 1
+          fi
           ls -lh "${ARCHIVE_NAME}"
-
+          exit 0
       - name: Upload source archive to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,7 +76,7 @@ jobs:
 
   build_debian_packages:
     name: Build Debian Package (${{ matrix.arch }})
-    runs-on: ubuntu-latest
+    runs-on: debian-testing
     needs: create_gh_release
     permissions:
       contents: write # Required to upload assets (read permission is implicit for checkout)
@@ -101,14 +105,20 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb --locked
+      - name: Install compilation dependencies (for amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends rustup
+          rustup -q update
 
       - name: Install cross-compilation dependencies (for arm64)
         if: matrix.arch == 'arm64'
         run: |
+          sudo dpkg --add-architecture arm64
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev:arm64
+          sudo apt-get install -y --no-install-recommends rustup gcc-aarch64-linux-gnu libc6-dev:arm64
+          rustup -q update
 
       - name: Configure linker for cross-compilation (for arm64)
         if: matrix.linker != '' && matrix.linker != null
@@ -120,17 +130,16 @@ jobs:
           cat .cargo/config.toml
 
       - name: Build Debian package for ${{ matrix.arch }}
-        run: cargo deb --target ${{ matrix.target }}
+        run: dpkg-buildpackage -b -uc -us --host-arch ${{ matrix.arch }}
 
       - name: Get package name and path
         id: package_info
         run: |
-          DEB_PATH=$(find target/debian/ target/${{ matrix.target }}/debian/ -name "rusty-socks_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
+          DEB_PATH=$(find ../ -name "rusty-socks_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
           if [ -z "$DEB_PATH" ]; then
             echo "::error::Could not find .deb package for ${{ matrix.arch }} matching 'rusty-socks_*_${{ matrix.arch }}.deb'"
             echo "Listing contents of potential directories:"
-            ls -R target/debian || echo "target/debian does not exist or is empty"
-            ls -R target/${{ matrix.target }}/debian || echo "target/${{ matrix.target }}/debian does not exist or is empty"
+            ls -l ../ || echo "target/debian does not exist or is empty"
             exit 1
           fi
           echo "Found deb package: $DEB_PATH"
