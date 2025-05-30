@@ -130,7 +130,7 @@ jobs:
           cat .cargo/config.toml
 
       - name: Build Debian package for ${{ matrix.arch }}
-        run: dpkg-buildpackage -b -uc -us --host-arch ${{ matrix.arch }}
+        run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
 
       - name: Get package name and path
         id: package_info
