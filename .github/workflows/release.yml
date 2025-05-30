@@ -110,14 +110,14 @@ jobs:
         if: matrix.arch == 'amd64'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends cargo rustc rustup
+          sudo apt-get install -y --no-install-recommends rustup
           rustup -q update
 
       - name: Install cross-compilation dependencies (for arm64)
         if: matrix.arch == 'arm64'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends cargo rustc rustup gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          sudo apt-get install -y --no-install-recommends rustup gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           rustup -q update
 
       - name: Configure linker for cross-compilation (for arm64)
