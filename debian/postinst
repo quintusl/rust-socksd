@@ -3,9 +3,16 @@ set -e
 
 case "$1" in
     configure)
-        # Reload the systemd configuration
-        systemd-sysusers
-        systemctl daemon-reload
+	# Create rusty-socks user and group
+        if ! getent group rusty-socks >/dev/null; then
+            addgroup --system rusty-socks
+        fi
+
+        if ! getent passwd rusty-socks >/dev/null; then
+            adduser --system --ingroup rusty-socks --home /var/run/rusty-socks \
+                    --shell /bin/false --disabled-password --disabled-login \
+                    --gecos "Rusty SOCKS proxy server" rusty-socks
+        fi
 
         # Set ownership and permissions
         chown -R rusty-socks:rusty-socks /var/lib/rusty-socks
@@ -14,6 +21,9 @@ case "$1" in
         chmod 640 /etc/rusty-socks/config.yml
         chown root:rusty-socks /etc/rusty-socks/users.yml
         chmod 660 /etc/rusty-socks/users.yml
+
+        # Reload the systemd configuration
+        systemctl daemon-reload
 
         # Enable and start the service
         systemctl enable rusty-socks.service
