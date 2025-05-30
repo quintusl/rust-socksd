@@ -3,19 +3,12 @@ set -e
 
 case "$1" in
     configure)
-        # Create rusty-socks user and group
-        if ! getent group rusty-socks >/dev/null; then
-            addgroup --system rusty-socks
-        fi
-
-        if ! getent passwd rusty-socks >/dev/null; then
-            adduser --system --ingroup rusty-socks --home /var/run/rusty-socks \
-                    --shell /bin/false --disabled-password --disabled-login \
-                    --gecos "Rusty SOCKS proxy server" rusty-socks
-        fi
+        # Reload the systemd configuration
+        systemd-sysusers
+        systemctl daemon-reload
 
         # Set ownership and permissions
-        chown -R rusty-socks:rusty-socks /var/run/rusty-socks
+        chown -R rusty-socks:rusty-socks /var/lib/rusty-socks
         chown -R rusty-socks:rusty-socks /var/log/rusty-socks
         chown root:rusty-socks /etc/rusty-socks/config.yml
         chmod 640 /etc/rusty-socks/config.yml
@@ -23,7 +16,6 @@ case "$1" in
         chmod 660 /etc/rusty-socks/users.yml
 
         # Enable and start the service
-        systemctl daemon-reload
         systemctl enable rusty-socks.service
 
         echo "Rusty SOCKS has been installed successfully."
