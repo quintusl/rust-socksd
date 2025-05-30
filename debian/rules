@@ -20,3 +20,7 @@ override_dh_auto_clean:
 override_dh_auto_test:
 	# Skip tests for now - can be enabled later
 	cargo test
+
+.PHONY: override_dh_strip
+override_dh_strip:
+    dh_strip --exclude=rusty-socks
