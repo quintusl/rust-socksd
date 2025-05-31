@@ -146,11 +146,6 @@ jobs:
       - name: Build Debian package for armhf
         if: matrix.arch == 'armhf'
         env:
-          # Set target for cross-compilation
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
-          # For armhf specifically, ensure we use the right target features
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: 'arm-linux-gnueabihf-gcc'
-          # PKG_CONFIG settings for cross-compilation
           PKG_CONFIG_ALLOW_CROSS: 1
           PKG_CONFIG_PATH: '/usr/lib/arm-linux-gnueabihf/pkgconfig'
         run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
@@ -158,11 +153,6 @@ jobs:
       - name: Build Debian package for arm64
         if: matrix.arch == 'arm64'
         env:
-          # Set target for cross-compilation
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
-          # For armhf specifically, ensure we use the right target features
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: 'aarch64-linux-gnu-gcc'
-          # PKG_CONFIG settings for cross-compilation
           PKG_CONFIG_ALLOW_CROSS: 1
           PKG_CONFIG_PATH: '/usr/lib/aarch64-linux-gnu/pkgconfig'
         run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
