@@ -36,6 +36,16 @@ sudo dpkg -i rusty-socks_0.1.0-1_amd64.deb
 yay -S rusty-socks
 ```
 
+#### Docker
+```bash
+# Pull and run the latest Docker image
+docker run -d \
+  --name rusty-socks \
+  -p 1080:1080 \
+  -p 8080:8080 \
+  ghcr.io/quintusl/rusty-socks:latest
+```
+
 ### Configuration
 
 Generate a default configuration file:
@@ -200,6 +210,10 @@ OPTIONS:
     -g, --generate-config <FILE>     Generate a default configuration file
     -v, --verbose                    Enable verbose logging (can be used multiple times)
     -q, --quiet                      Suppress all output except errors
+    -b, --bind <ADDRESS>             Bind address (can also be set via RUSTY_SOCKS_BIND_ADDRESS)
+    -p, --http-port <PORT>           HTTP proxy port (can also be set via RUSTY_SOCKS_HTTP_PORT)
+    -s, --socks5-port <PORT>         SOCKS5 proxy port (can also be set via RUSTY_SOCKS_SOCKS5_PORT)
+    -l, --loglevel <LEVEL>           Log level: trace, debug, info, warn, error (can also be set via RUSTY_SOCKS_LOG_LEVEL)
     -h, --help                       Print help information
     -V, --version                    Print version information
 
@@ -314,6 +328,135 @@ ARGUMENTS:
 OPTIONS:
         --user-config <FILE>         User configuration file path [default: users.yml]
 ```
+
+## Environment Variables
+
+Rusty SOCKS supports several environment variables for configuration override:
+
+- **RUSTY_SOCKS_BIND_ADDRESS**: Override the bind address (e.g., `0.0.0.0`)
+- **RUSTY_SOCKS_SOCKS5_PORT**: Override the SOCKS5 port (e.g., `1080`)
+- **RUSTY_SOCKS_HTTP_PORT**: Override the HTTP proxy port (e.g., `8080`)
+- **RUSTY_SOCKS_LOG_LEVEL**: Override the log level (`trace`, `debug`, `info`, `warn`, `error`)
+
+These environment variables take precedence over configuration file settings but are overridden by command line arguments.
+
+### Examples
+
+```bash
+# Start with custom bind address and ports
+export RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0"
+export RUSTY_SOCKS_SOCKS5_PORT="1081"
+export RUSTY_SOCKS_HTTP_PORT="8081"
+rusty-socks --config config.yml
+
+# Start with debug logging
+export RUSTY_SOCKS_LOG_LEVEL="debug"
+rusty-socks --config config.yml
+
+# Override specific settings via command line (takes highest precedence)
+RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0" rusty-socks --socks5-port 1082 --config config.yml
+```
+
+## Docker Support
+
+Rusty SOCKS provides official Docker support with multi-stage builds for optimal security and performance.
+
+### Quick Start with Docker
+
+#### Using Pre-built Image
+
+```bash
+# Pull and run the latest image
+docker run -d \
+  --name rusty-socks \
+  -p 1080:1080 \
+  -p 8080:8080 \
+  ghcr.io/quintusl/rusty-socks:latest
+```
+
+#### Building from Source
+
+```bash
+# Build the Docker image
+docker build -t rusty-socks .
+
+# Run the container
+docker run -d \
+  --name rusty-socks \
+  -p 1080:1080 \
+  -p 8080:8080 \
+  rusty-socks
+```
+
+### Docker Configuration
+
+#### Using Environment Variables
+
+```bash
+docker run -d \
+  --name rusty-socks \
+  -p 1080:1080 \
+  -p 8080:8080 \
+  -e RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0" \
+  -e RUSTY_SOCKS_SOCKS5_PORT="1080" \
+  -e RUSTY_SOCKS_HTTP_PORT="8080" \
+  -e RUSTY_SOCKS_LOG_LEVEL="info" \
+  rusty-socks
+```
+
+#### Using Custom Configuration Files
+
+```bash
+# Create a directory for configuration files
+mkdir -p ./config
+
+# Generate default configuration
+docker run --rm -v ./config:/config rusty-socks --generate-config /config/config.yml
+
+# Edit the configuration file
+nano ./config/config.yml
+
+# Run with custom configuration
+docker run -d \
+  --name rusty-socks \
+  -p 1080:1080 \
+  -p 8080:8080 \
+  -v ./config:/config \
+  rusty-socks --config /config/config.yml
+```
+
+#### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  rusty-socks:
+    image: ghcr.io/quintusl/rusty-socks:latest
+    container_name: rusty-socks
+    ports:
+      - "1080:1080"  # SOCKS5 port
+      - "8080:8080"  # HTTP proxy port
+    environment:
+      - RUSTY_SOCKS_BIND_ADDRESS=0.0.0.0
+      - RUSTY_SOCKS_LOG_LEVEL=info
+    volumes:
+      - ./config:/config  # Optional: mount config directory
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"  # Run as non-root user
+```
+
+### Docker Security Features
+
+The Docker image includes several security enhancements:
+
+- **Multi-stage Build**: Minimal runtime image with only necessary components
+- **Non-root User**: Runs as user `appuser` (UID 1001) for security
+- **Minimal Base**: Uses `debian:bullseye-slim` for reduced attack surface
+- **No Privileges**: Container runs without additional privileges
+- **Exposed Ports**: Only necessary ports (1080, 8080) are exposed
 
 ## Systemd Service
 
