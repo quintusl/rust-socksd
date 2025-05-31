@@ -4,10 +4,18 @@
 	dh $@
 
 override_dh_auto_build:
+ifdef CARGO_BUILD_TARGET
+	cargo build --release --target $(CARGO_BUILD_TARGET)
+else
 	cargo build --release
+endif
 
 override_dh_auto_install:
+ifdef CARGO_BUILD_TARGET
+	install -D -m755 target/$(CARGO_BUILD_TARGET)/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
+else
 	install -D -m755 target/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
+endif
 	install -D -m644 config/rusty-socks.service debian/rusty-socks/lib/systemd/system/rusty-socks.service
 	install -D -m644 config/rusty-socks.sysusers.conf debian/rusty-socks/usr/lib/sysusers.d/rusty-socks.conf
 	install -D -m640 config/config.yml.journald.example debian/rusty-socks/etc/rusty-socks/config.yml
