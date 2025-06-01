@@ -144,7 +144,7 @@ jobs:
           mkdir -p .cargo
           echo '[target.${{ matrix.target }}]' > .cargo/config.toml
           echo 'linker = "${{ matrix.linker }}"' >> .cargo/config.toml
-          echo 'rustflags = "${{ matrix.rustflags }}"' >> .cargo/config.toml
+          echo 'rustflags = ${{ matrix.rustflags }}' >> .cargo/config.toml
           echo "Configured .cargo/config.toml for ${{ matrix.target }}:"
           cat .cargo/config.toml
 
