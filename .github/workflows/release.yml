@@ -138,16 +138,6 @@ jobs:
           rustup target add ${{ matrix.target }}
           rustup -q update
 
-      - name: Configure linker for cross-compilation (for ARM)
-        if: matrix.linker != '' && matrix.linker != null
-        run: |
-          mkdir -p .cargo
-          echo '[target.${{ matrix.target }}]' > .cargo/config.toml
-          echo 'linker = "${{ matrix.linker }}"' >> .cargo/config.toml
-          echo 'rustflags = ${{ matrix.rustflags }}' >> .cargo/config.toml
-          echo "Configured .cargo/config.toml for ${{ matrix.target }}:"
-          cat .cargo/config.toml
-
       - name: Build Debian package for ${{ matrix.arch }}
         if: matrix.arch != 'armhf' && matrix.arch != 'arm64'
         run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
