@@ -24,9 +24,6 @@ target/
 .vscode/
 
 # Debian
-debhelper-build-stamp
-.DS_Store
-.debhelper
 *.deb
 *.dsc
 *.build
@@ -38,3 +35,6 @@ debhelper-build-stamp
 .vagrant
 debian/rusty-socks
 debian/files
+debian/debhelper-build-stamp
+debian/.debhelper
+debian/rusty-socks.postrm.debhelper
