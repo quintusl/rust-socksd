@@ -91,9 +91,12 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             arch: arm64
             linker: aarch64-linux-gnu-gcc
+            rustflags: '["-C", "target-feature=+crt-static"]'
           - target: armv7-unknown-linux-gnueabihf
             arch: armhf
-            linker: arm-linux-gnueabihf-gcc
+            linker: '/opt/rpi_tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc'
+            rustflags: '["-C", "target-feature=+crt-static"]'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -121,6 +124,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends debhelper-compat rustup gcc-arm-linux-gnueabihf libc6-dev-armhf-cross pkg-config
+          mkdir -p /opt
+          # Download and extract Raspberry Pi cross-compilation tools
+          git clone https://github.com/raspberrypi/tools /opt/rpi_tools
+          rustup target add ${{ matrix.target }}
           rustup -q update
 
       - name: Install cross-compilation dependencies (for ARM64)
@@ -128,6 +135,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends debhelper-compat rustup gcc-aarch64-linux-gnu libc6-dev-arm64-cross pkg-config
+          rustup target add ${{ matrix.target }}
           rustup -q update
 
       - name: Configure linker for cross-compilation (for ARM)
@@ -136,6 +144,7 @@ jobs:
           mkdir -p .cargo
           echo '[target.${{ matrix.target }}]' > .cargo/config.toml
           echo 'linker = "${{ matrix.linker }}"' >> .cargo/config.toml
+          echo 'rustflags = ${{ matrix.rustflags }}' >> .cargo/config.toml
           echo "Configured .cargo/config.toml for ${{ matrix.target }}:"
           cat .cargo/config.toml
 
@@ -146,6 +155,11 @@ jobs:
       - name: Build Debian package for armhf
         if: matrix.arch == 'armhf'
         env:
+          # Set target for cross-compilation
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+          # For armhf specifically, ensure we use the right target features
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: 'arm-linux-gnueabihf-gcc'
+          # PKG_CONFIG settings for cross-compilation
           PKG_CONFIG_ALLOW_CROSS: 1
           PKG_CONFIG_PATH: '/usr/lib/arm-linux-gnueabihf/pkgconfig'
         run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
@@ -153,6 +167,11 @@ jobs:
       - name: Build Debian package for arm64
         if: matrix.arch == 'arm64'
         env:
+          # Set target for cross-compilation
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+          # For armhf specifically, ensure we use the right target features
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: 'aarch64-linux-gnu-gcc'
+          # PKG_CONFIG settings for cross-compilation
           PKG_CONFIG_ALLOW_CROSS: 1
           PKG_CONFIG_PATH: '/usr/lib/aarch64-linux-gnu/pkgconfig'
         run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
