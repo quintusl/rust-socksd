@@ -5,11 +5,9 @@ index = "https://github.com/rust-lang/crates.io-index" # I set the source to the
 proxy = "" # leaving this as a blank string resets proxy to default
 
 [target.aarch64-unknown-linux-gnu]
-arch = "arm64"
 linker = "aarch64-linux-gnu-gcc"
 rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.armv7-unknown-linux-gnueabihf]
-arch = "armhf"
 linker = "/opt/rpi_tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc"
 rustflags = ["-C", "target-feature=+crt-static"]
