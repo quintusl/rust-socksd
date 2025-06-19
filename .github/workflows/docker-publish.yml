@@ -40,7 +40,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/rusty-socks # Replace rusty-socks if your image name is different
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/rust-socksd
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}

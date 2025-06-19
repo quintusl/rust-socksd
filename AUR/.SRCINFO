@@ -15,4 +15,4 @@ pkgbase = rust-socksd
 	source = rust-socksd-0.1.1.tar.gz::https://github.com/quintusl/rust-socksd/archive/v0.1.1.tar.gz
 	sha256sums = SKIP
 
-pkgname = rusty-socks
+pkgname = rust-socksd

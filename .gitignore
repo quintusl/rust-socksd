@@ -33,8 +33,8 @@ target/
 *.log
 *.substvars
 .vagrant
-debian/rusty-socks
+debian/rust-socksd
 debian/files
 debian/debhelper-build-stamp
 debian/.debhelper
-debian/rusty-socks.postrm.debhelper
+debian/rust-socksd.postrm.debhelper

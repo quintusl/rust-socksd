@@ -31,7 +31,7 @@ jobs:
         run: |
           gh release create ${{ github.ref_name }} \
             --title "Release ${{ github.ref_name }}" \
-            --notes "Automated release for rusty-socks version ${{ env.VERSION }}.
+            --notes "Automated release for rust-socksd version ${{ env.VERSION }}.
           See CHANGELOG.md for details (if available).
           Assets will be uploaded by subsequent jobs." \
             --draft=false \
@@ -169,9 +169,9 @@ jobs:
       - name: Get package name and path
         id: package_info
         run: |
-          DEB_PATH=$(find ../ -name "rusty-socks_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
+          DEB_PATH=$(find ../ -name "rust-socksd_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
           if [ -z "$DEB_PATH" ]; then
-            echo "::error::Could not find .deb package for ${{ matrix.arch }} matching 'rusty-socks_*_${{ matrix.arch }}.deb'"
+            echo "::error::Could not find .deb package for ${{ matrix.arch }} matching 'rust-socksd_*_${{ matrix.arch }}.deb'"
             echo "Listing contents of potential directories:"
             ls -l ../ || echo "target/debian does not exist or is empty"
             exit 1
