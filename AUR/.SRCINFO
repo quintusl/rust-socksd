@@ -1,6 +1,6 @@
 pkgbase = rust-socksd
 	pkgdesc = A high-performance SOCKS5 and HTTP proxy server written in Rust
-	pkgver = 0.1.0
+	pkgver = 0.1.1
 	pkgrel = 3
 	url = https://github.com/quintusl/rust-socksd
 	arch = x86_64

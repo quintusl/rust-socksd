@@ -1,6 +1,12 @@
+rust-socksd (0.1.1-1) unstable; urgency=medium
+
+  * Rename project to rust-socksd
+
+ -- Quintus Leung <quintusl@gmail.com>  Thu, 19 June 2025 12:00:00 +0000
+
 rust-socksd (0.1.0-1) unstable; urgency=medium
 
-  * Initial release of rust-socksd proxy server
+  * Initial release of rusty-socks proxy server
   * Full SOCKS5 protocol implementation with authentication support
   * HTTP proxy functionality with CONNECT method
   * Multi-threaded async architecture using tokio
