@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Arg, Command, ArgMatches};
-use rusty_socks::{Config, ProxyServer, UserConfig, HashType};
+use rust_socksd::{Config, ProxyServer, UserConfig, HashType};
 use std::io::{self, Write};
 use tracing::{error, info, Level};
 use tracing_appender::non_blocking::WorkerGuard;
@@ -9,7 +9,7 @@ use tracing_journald;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let matches = Command::new("rusty-socks")
+    let matches = Command::new("rust-socksd")
         .version("0.1.0")
         .author("Your Name <your.email@example.com>")
         .about("A high-performance SOCKS5 and HTTP proxy server")
@@ -50,28 +50,28 @@ async fn main() -> Result<()> {
                 .short('b')
                 .long("bind")
                 .value_name("ADDRESS")
-                .help("Bind address (can also be set via RUSTY_SOCKS_BIND_ADDRESS)"),
+                .help("Bind address (can also be set via RUST_SOCKSD_BIND_ADDRESS)"),
         )
         .arg(
             Arg::new("http-port")
                 .short('p')
                 .long("http-port")
                 .value_name("PORT")
-                .help("HTTP proxy port (can also be set via RUSTY_SOCKS_HTTP_PORT)"),
+                .help("HTTP proxy port (can also be set via RUST_SOCKSD_HTTP_PORT)"),
         )
         .arg(
             Arg::new("socks5-port")
                 .short('s')
                 .long("socks5-port")
                 .value_name("PORT")
-                .help("SOCKS5 proxy port (can also be set via RUSTY_SOCKS_SOCKS5_PORT)"),
+                .help("SOCKS5 proxy port (can also be set via RUST_SOCKSD_SOCKS5_PORT)"),
         )
         .arg(
             Arg::new("loglevel")
                 .short('l')
                 .long("loglevel")
                 .value_name("LEVEL")
-                .help("Log level: trace, debug, info, warn, error (can also be set via RUSTY_SOCKS_LOG_LEVEL)"),
+                .help("Log level: trace, debug, info, warn, error (can also be set via RUST_SOCKSD_LOG_LEVEL)"),
         )
         .subcommand(
             Command::new("validate")
@@ -211,7 +211,7 @@ async fn main() -> Result<()> {
     // Apply CLI/environment overrides
     if let Some(bind_address) = matches.get_one::<String>("bind") {
         config.server.bind_address = bind_address.clone();
-    } else if let Ok(bind_address) = std::env::var("RUSTY_SOCKS_BIND_ADDRESS") {
+    } else if let Ok(bind_address) = std::env::var("RUST_SOCKSD_BIND_ADDRESS") {
         config.server.bind_address = bind_address;
     }
     
@@ -219,7 +219,7 @@ async fn main() -> Result<()> {
         if let Ok(port) = http_port.parse::<u16>() {
             config.server.http_port = port;
         }
-    } else if let Ok(http_port) = std::env::var("RUSTY_SOCKS_HTTP_PORT") {
+    } else if let Ok(http_port) = std::env::var("RUST_SOCKSD_HTTP_PORT") {
         if let Ok(port) = http_port.parse::<u16>() {
             config.server.http_port = port;
         }
@@ -229,7 +229,7 @@ async fn main() -> Result<()> {
         if let Ok(port) = socks5_port.parse::<u16>() {
             config.server.socks5_port = port;
         }
-    } else if let Ok(socks5_port) = std::env::var("RUSTY_SOCKS_SOCKS5_PORT") {
+    } else if let Ok(socks5_port) = std::env::var("RUST_SOCKSD_SOCKS5_PORT") {
         if let Ok(port) = socks5_port.parse::<u16>() {
             config.server.socks5_port = port;
         }
@@ -237,7 +237,7 @@ async fn main() -> Result<()> {
     
     if let Some(log_level) = matches.get_one::<String>("loglevel") {
         config.logging.level = log_level.clone();
-    } else if let Ok(log_level) = std::env::var("RUSTY_SOCKS_LOG_LEVEL") {
+    } else if let Ok(log_level) = std::env::var("RUST_SOCKSD_LOG_LEVEL") {
         config.logging.level = log_level;
     }
 
@@ -257,7 +257,7 @@ async fn main() -> Result<()> {
         info!("Configuration file {} not found, using defaults", config_path);
     };
 
-    info!("Starting Rusty SOCKS proxy server");
+    info!("Starting rust-socksd proxy server");
     info!("SOCKS5 will listen on {}:{}", config.server.bind_address, config.server.socks5_port);
     info!("HTTP proxy will listen on {}:{}", config.server.bind_address, config.server.http_port);
 

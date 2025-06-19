@@ -12,16 +12,16 @@ endif
 
 override_dh_auto_install:
 ifdef CARGO_BUILD_TARGET
-	install -D -m755 target/$(CARGO_BUILD_TARGET)/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
+	install -D -m755 target/$(CARGO_BUILD_TARGET)/release/rust-socksd debian/rust-socksd/usr/bin/rust-socksd
 else
-	install -D -m755 target/release/rusty-socks debian/rusty-socks/usr/bin/rusty-socks
+	install -D -m755 target/release/rust-socksd debian/rust-socksd/usr/bin/rust-socksd
 endif
-	install -D -m644 config/rusty-socks.service debian/rusty-socks/lib/systemd/system/rusty-socks.service
-	install -D -m644 config/rusty-socks.sysusers.conf debian/rusty-socks/usr/lib/sysusers.d/rusty-socks.conf
-	install -D -m640 config/config.yml.journald.example debian/rusty-socks/etc/rusty-socks/config.yml
-	install -D -m660 config/users.yml.example debian/rusty-socks/etc/rusty-socks/users.yml
-	install -d debian/rusty-socks/var/log/rusty-socks
-	install -d debian/rusty-socks/var/lib/rusty-socks
+	install -D -m644 config/rust-socksd.service debian/rust-socksd/lib/systemd/system/rust-socksd.service
+	install -D -m644 config/rust-socksd.sysusers.conf debian/rust-socksd/usr/lib/sysusers.d/rust-socksd.conf
+	install -D -m640 config/config.yml.journald.example debian/rust-socksd/etc/rust-socksd/config.yml
+	install -D -m660 config/users.yml.example debian/rust-socksd/etc/rust-socksd/users.yml
+	install -d debian/rust-socksd/var/log/rust-socksd
+	install -d debian/rust-socksd/var/lib/rust-socksd
 
 override_dh_auto_clean:
 	cargo clean
@@ -32,4 +32,4 @@ override_dh_auto_test:
 
 .PHONY: override_dh_strip
 override_dh_strip:
-	dh_strip --exclude=rusty-socks
+	dh_strip --exclude=rust-socksd

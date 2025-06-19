@@ -1,19 +1,19 @@
-Source: rusty-socks
+Source: rust-socksd
 Section: net
 Priority: optional
 Maintainer: Quintus Leung <quintusl@gmail.com>
 Build-Depends: debhelper-compat (= 13), cargo, rustc
 Standards-Version: 4.6.0
-Homepage: https://github.com/quintusl/rusty-socks
-Vcs-Git: https://github.com/quintusl/rusty-socks.git
-Vcs-Browser: https://github.com/quintusl/rusty-socks
+Homepage: https://github.com/quintusl/rust-socksd
+Vcs-Git: https://github.com/quintusl/rust-socksd.git
+Vcs-Browser: https://github.com/quintusl/rust-socksd
 
-Package: rusty-socks
+Package: rust-socksd
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
 Recommends: systemd
 Description: High-performance SOCKS5 and HTTP proxy server
- Rusty SOCKS is a modern, high-performance proxy server written in Rust
+ rust-socksd is a modern, high-performance proxy server written in Rust
  that supports both SOCKS5 and HTTP proxy protocols. It features:
  .
   * Full SOCKS5 protocol support with authentication

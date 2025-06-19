@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rusty SOCKS is a high-performance SOCKS5 and HTTP proxy server written in Rust with async architecture. The codebase features:
+rust-socksd is a high-performance SOCKS5 and HTTP proxy server written in Rust with async architecture. The codebase features:
 
 - **Dual Protocol Support**: SOCKS5 and HTTP proxy protocols running on separate ports
 - **Async Architecture**: Built on tokio with concurrent connection handling 
@@ -90,7 +90,7 @@ cargo run -- validate --config config.yml --user-config users.yml
 dpkg-buildpackage -b
 
 # Check systemd service
-systemctl --user status rusty-socks
+systemctl --user status rust-socksd
 ```
 
 ## Key Implementation Notes

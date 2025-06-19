@@ -1,4 +1,4 @@
-# User Configuration File for Rusty SOCKS Proxy
+# User Configuration File for rust-socksd Proxy
 # This file contains user credentials with secure password hashing
 
 # Password hash type: argon2, bcrypt, or scrypt
@@ -7,7 +7,7 @@ hash_type: argon2
 # User accounts
 users:
   # Example users (these are generated using secure hash functions)
-  # Use the 'rusty-socks user' commands to manage users
+  # Use the 'rust-socksd user' commands to manage users
   
   # Sample user entry structure:
   # username:
@@ -17,6 +17,6 @@ users:
   #   last_modified: "2023-01-01T12:00:00Z"
   #   enabled: true
   
-  # To add users, use: rusty-socks user add <username>
-  # To list users, use: rusty-socks user list
-  # To remove users, use: rusty-socks user remove <username>
+  # To add users, use: rust-socksd user add <username>
+  # To list users, use: rust-socksd user list
+  # To remove users, use: rust-socksd user remove <username>

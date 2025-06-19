@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: rusty-socks
+Upstream-Name: rust-socksd
 Upstream-Contact: Quintus Leung <quintusl@gmail.com>
-Source: https://github.com/quintusl/rusty-socks
+Source: https://github.com/quintusl/rust-socksd
 
 Files: *
 Copyright: 2025 Quintus Leung <quintusl@gmail.com>

@@ -37,10 +37,10 @@ RUN groupadd -g ${GID} appgroup && \
 WORKDIR /app
 
 # Copy the compiled binary from the builder stage to a common bin location
-COPY --from=builder /app/target/release/rusty-socks /usr/local/bin/rusty-socks
+COPY --from=builder /app/target/release/rust-socksd /usr/local/bin/rust-socksd
 
 # Ensure the binary is executable
-RUN chmod +x /usr/local/bin/rusty-socks
+RUN chmod +x /usr/local/bin/rust-socksd
 
 # Expose the default SOCKS5 port
 EXPOSE 1080
@@ -50,17 +50,17 @@ EXPOSE 1080
 # Switch to the non-root user
 USER appuser
 
-# Set default environment variables for rusty-socks configuration.
-# Assumes rusty-socks reads these.
+# Set default environment variables for rust-socksd configuration.
+# Assumes rust-socksd reads these.
 
 # Listen on all interfaces inside the container
-ENV RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0"
+ENV RUST_SOCKSD_BIND_ADDRESS="0.0.0.0"
 # Default SOCKS5 port
-ENV RUSTY_SOCKS_SOCKS5_PORT="1080"
+ENV RUST_SOCKSD_SOCKS5_PORT="1080"
 # Default HTTP port (adjust if needed)
-ENV RUSTY_SOCKS_HTTP_PORT="8080"
+ENV RUST_SOCKSD_HTTP_PORT="8080"
 # Log level
-ENV RUSTY_SOCKS_LOG_LEVEL="info"
+ENV RUST_SOCKSD_LOG_LEVEL="info"
 
 # Default command to run the application
-CMD ["rusty-socks"]
+CMD ["rust-socksd"]

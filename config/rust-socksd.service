@@ -1,27 +1,27 @@
 [Unit]
-Description=Rusty SOCKS5 and HTTP Proxy Server
+Description=rust-socksd SOCKS5 and HTTP Proxy Server
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
-User=rusty-socks
-Group=rusty-socks
-WorkingDirectory=/var/lib/rusty-socks
-ExecStart=/usr/bin/rusty-socks --config /etc/rusty-socks/config.yml
+User=rust-socksd
+Group=rust-socksd
+WorkingDirectory=/var/lib/rust-socksd
+ExecStart=/usr/bin/rust-socksd --config /etc/rust-socksd/config.yml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=rusty-socks
+SyslogIdentifier=rust-socksd
 
 # Security settings
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/log/rusty-socks
+ReadWritePaths=/var/log/rust-socksd
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

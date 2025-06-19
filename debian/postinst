@@ -3,34 +3,34 @@ set -e
 
 case "$1" in
     configure)
-	# Create rusty-socks user and group
-        if ! getent group rusty-socks >/dev/null; then
-            addgroup --system rusty-socks
+	# Create rust-socksd user and group
+        if ! getent group rust-socksd >/dev/null; then
+            addgroup --system rust-socksd
         fi
 
-        if ! getent passwd rusty-socks >/dev/null; then
-            adduser --system --ingroup rusty-socks --home /var/run/rusty-socks \
+        if ! getent passwd rust-socksd >/dev/null; then
+            adduser --system --ingroup rust-socksd --home /var/run/rust-socksd \
                     --shell /bin/false --disabled-password --disabled-login \
-                    --gecos "Rusty SOCKS proxy server" rusty-socks
+                    --gecos "rust-socksd proxy server" rust-socksd
         fi
 
         # Set ownership and permissions
-        chown -R rusty-socks:rusty-socks /var/lib/rusty-socks
-        chown -R rusty-socks:rusty-socks /var/log/rusty-socks
-        chown root:rusty-socks /etc/rusty-socks/config.yml
-        chmod 640 /etc/rusty-socks/config.yml
-        chown root:rusty-socks /etc/rusty-socks/users.yml
-        chmod 660 /etc/rusty-socks/users.yml
+        chown -R rust-socksd:rust-socksd /var/lib/rust-socksd
+        chown -R rust-socksd:rust-socksd /var/log/rust-socksd
+        chown root:rust-socksd /etc/rust-socksd/config.yml
+        chmod 640 /etc/rust-socksd/config.yml
+        chown root:rust-socksd /etc/rust-socksd/users.yml
+        chmod 660 /etc/rust-socksd/users.yml
 
         # Reload the systemd configuration
         systemctl daemon-reload
 
         # Enable and start the service
-        systemctl enable rusty-socks.service
+        systemctl enable rust-socksd.service
 
-        echo "Rusty SOCKS has been installed successfully."
-        echo "Edit /etc/rusty-socks/config.yml to configure the server."
-        echo "Start the service with: systemctl start rusty-socks"
+        echo "rust-socksd has been installed successfully."
+        echo "Edit /etc/rust-socksd/config.yml to configure the server."
+        echo "Start the service with: systemctl start rust-socksd"
         ;;
 esac
 

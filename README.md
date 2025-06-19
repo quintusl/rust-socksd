@@ -1,4 +1,4 @@
-# Rusty SOCKS
+# rust-socksd
 
 A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring modern async architecture and comprehensive security features.
 
@@ -20,37 +20,37 @@ A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring moder
 
 #### From Source
 ```bash
-git clone https://github.com/quintusl/rusty-socks.git
-cd rusty-socks
+git clone https://github.com/quintusl/rust-socksd.git
+cd rust-socksd
 cargo build --release
-sudo cp target/release/rusty-socks /usr/local/bin/
+sudo cp target/release/rust-socksd /usr/local/bin/
 ```
 
 #### Debian/Ubuntu
 ```bash
-sudo dpkg -i rusty-socks_0.1.0-1_amd64.deb
+sudo dpkg -i rust-socksd_0.1.0-1_amd64.deb
 ```
 
 #### Arch Linux
 ```bash
-yay -S rusty-socks
+yay -S rust-socksd
 ```
 
 #### Docker
 ```bash
 # Pull and run the latest Docker image
 docker run -d \
-  --name rusty-socks \
+  --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  ghcr.io/quintusl/rusty-socks:latest
+  ghcr.io/quintusl/rust-socksd:latest
 ```
 
 ### Configuration
 
 Generate a default configuration file:
 ```bash
-rusty-socks --generate-config config.yml
+rust-socksd --generate-config config.yml
 ```
 
 Edit the configuration file to suit your needs:
@@ -62,13 +62,13 @@ nano config.yml
 
 #### Direct execution:
 ```bash
-rusty-socks --config config.yml
+rust-socksd --config config.yml
 ```
 
 #### As a systemd service:
 ```bash
-sudo systemctl enable rusty-socks
-sudo systemctl start rusty-socks
+sudo systemctl enable rust-socksd
+sudo systemctl start rust-socksd
 ```
 
 ## Configuration
@@ -96,7 +96,7 @@ logging:
 
 ### Authentication
 
-Rusty SOCKS supports secure username/password authentication using separate configuration files for enhanced security. Users are managed through dedicated CLI commands with secure password hashing.
+rust-socksd supports secure username/password authentication using separate configuration files for enhanced security. Users are managed through dedicated CLI commands with secure password hashing.
 
 #### Enabling Authentication
 
@@ -116,40 +116,40 @@ Users are managed separately from the main configuration using the `user` subcom
 ##### Initialize User Configuration
 ```bash
 # Create a new user configuration file
-rusty-socks user init --user-config users.yml --hash-type argon2
+rust-socksd user init --user-config users.yml --hash-type argon2
 ```
 
 ##### Add Users
 ```bash
 # Add a new user (will prompt for password)
-rusty-socks user add --user-config users.yml username
+rust-socksd user add --user-config users.yml username
 
 # Add user with password specified
-rusty-socks user add --user-config users.yml username password
+rust-socksd user add --user-config users.yml username password
 
 # Specify hash type (argon2, bcrypt, scrypt)
-rusty-socks user add --user-config users.yml --hash-type bcrypt username
+rust-socksd user add --user-config users.yml --hash-type bcrypt username
 ```
 
 ##### Manage Existing Users
 ```bash
 # List all users
-rusty-socks user list --user-config users.yml
+rust-socksd user list --user-config users.yml
 
 # Update user password
-rusty-socks user update --user-config users.yml username
+rust-socksd user update --user-config users.yml username
 
 # Enable/disable a user
-rusty-socks user enable --user-config users.yml username true
-rusty-socks user enable --user-config users.yml username false
+rust-socksd user enable --user-config users.yml username true
+rust-socksd user enable --user-config users.yml username false
 
 # Remove a user
-rusty-socks user remove --user-config users.yml username
+rust-socksd user remove --user-config users.yml username
 ```
 
 #### Password Security
 
-Rusty SOCKS uses secure password hashing with support for:
+rust-socksd uses secure password hashing with support for:
 - **Argon2** (default, recommended)
 - **bcrypt** 
 - **scrypt**
@@ -203,17 +203,17 @@ curl --proxy localhost:8080 https://httpbin.org/ip
 ### Main Command
 
 ```
-rusty-socks [OPTIONS] [SUBCOMMAND]
+rust-socksd [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
     -c, --config <FILE>              Configuration file path [default: config.yml]
     -g, --generate-config <FILE>     Generate a default configuration file
     -v, --verbose                    Enable verbose logging (can be used multiple times)
     -q, --quiet                      Suppress all output except errors
-    -b, --bind <ADDRESS>             Bind address (can also be set via RUSTY_SOCKS_BIND_ADDRESS)
-    -p, --http-port <PORT>           HTTP proxy port (can also be set via RUSTY_SOCKS_HTTP_PORT)
-    -s, --socks5-port <PORT>         SOCKS5 proxy port (can also be set via RUSTY_SOCKS_SOCKS5_PORT)
-    -l, --loglevel <LEVEL>           Log level: trace, debug, info, warn, error (can also be set via RUSTY_SOCKS_LOG_LEVEL)
+    -b, --bind <ADDRESS>             Bind address (can also be set via RUST_SOCKSD_BIND_ADDRESS)
+    -p, --http-port <PORT>           HTTP proxy port (can also be set via RUST_SOCKSD_HTTP_PORT)
+    -s, --socks5-port <PORT>         SOCKS5 proxy port (can also be set via RUST_SOCKSD_SOCKS5_PORT)
+    -l, --loglevel <LEVEL>           Log level: trace, debug, info, warn, error (can also be set via RUST_SOCKSD_LOG_LEVEL)
     -h, --help                       Print help information
     -V, --version                    Print version information
 
@@ -227,7 +227,7 @@ SUBCOMMANDS:
 Validate configuration files for syntax and consistency:
 
 ```
-rusty-socks validate [OPTIONS]
+rust-socksd validate [OPTIONS]
 
 OPTIONS:
     -c, --config <FILE>              Configuration file to validate [default: config.yml]
@@ -237,10 +237,10 @@ OPTIONS:
 Examples:
 ```bash
 # Validate main configuration
-rusty-socks validate
+rust-socksd validate
 
 # Validate specific config files
-rusty-socks validate --config /etc/rusty-socks/config.yml --user-config /etc/rusty-socks/users.yml
+rust-socksd validate --config /etc/rust-socksd/config.yml --user-config /etc/rust-socksd/users.yml
 ```
 
 ### User Management Subcommand
@@ -248,7 +248,7 @@ rusty-socks validate --config /etc/rusty-socks/config.yml --user-config /etc/rus
 Manage user accounts with secure password hashing:
 
 ```
-rusty-socks user [OPTIONS] <SUBCOMMAND>
+rust-socksd user [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
         --user-config <FILE>         User configuration file path [default: users.yml]
@@ -266,7 +266,7 @@ SUBCOMMANDS:
 
 ##### Initialize User Config
 ```
-rusty-socks user init [OPTIONS]
+rust-socksd user init [OPTIONS]
 
 OPTIONS:
         --hash-type <TYPE>           Default password hash type: argon2, bcrypt, scrypt [default: argon2]
@@ -275,7 +275,7 @@ OPTIONS:
 
 ##### Add User
 ```
-rusty-socks user add [OPTIONS] <USERNAME> [PASSWORD]
+rust-socksd user add [OPTIONS] <USERNAME> [PASSWORD]
 
 ARGUMENTS:
     <USERNAME>                       Username
@@ -288,7 +288,7 @@ OPTIONS:
 
 ##### Remove User
 ```
-rusty-socks user remove [OPTIONS] <USERNAME>
+rust-socksd user remove [OPTIONS] <USERNAME>
 
 ARGUMENTS:
     <USERNAME>                       Username to remove
@@ -299,7 +299,7 @@ OPTIONS:
 
 ##### List Users
 ```
-rusty-socks user list [OPTIONS]
+rust-socksd user list [OPTIONS]
 
 OPTIONS:
         --user-config <FILE>         User configuration file path [default: users.yml]
@@ -307,7 +307,7 @@ OPTIONS:
 
 ##### Update User Password
 ```
-rusty-socks user update [OPTIONS] <USERNAME> [PASSWORD]
+rust-socksd user update [OPTIONS] <USERNAME> [PASSWORD]
 
 ARGUMENTS:
     <USERNAME>                       Username
@@ -319,7 +319,7 @@ OPTIONS:
 
 ##### Enable/Disable User
 ```
-rusty-socks user enable [OPTIONS] <USERNAME> <ENABLED>
+rust-socksd user enable [OPTIONS] <USERNAME> <ENABLED>
 
 ARGUMENTS:
     <USERNAME>                       Username
@@ -331,12 +331,12 @@ OPTIONS:
 
 ## Environment Variables
 
-Rusty SOCKS supports several environment variables for configuration override:
+rust-socksd supports several environment variables for configuration override:
 
-- **RUSTY_SOCKS_BIND_ADDRESS**: Override the bind address (e.g., `0.0.0.0`)
-- **RUSTY_SOCKS_SOCKS5_PORT**: Override the SOCKS5 port (e.g., `1080`)
-- **RUSTY_SOCKS_HTTP_PORT**: Override the HTTP proxy port (e.g., `8080`)
-- **RUSTY_SOCKS_LOG_LEVEL**: Override the log level (`trace`, `debug`, `info`, `warn`, `error`)
+- **RUST_SOCKSD_BIND_ADDRESS**: Override the bind address (e.g., `0.0.0.0`)
+- **RUST_SOCKSD_SOCKS5_PORT**: Override the SOCKS5 port (e.g., `1080`)
+- **RUST_SOCKSD_HTTP_PORT**: Override the HTTP proxy port (e.g., `8080`)
+- **RUST_SOCKSD_LOG_LEVEL**: Override the log level (`trace`, `debug`, `info`, `warn`, `error`)
 
 These environment variables take precedence over configuration file settings but are overridden by command line arguments.
 
@@ -344,22 +344,22 @@ These environment variables take precedence over configuration file settings but
 
 ```bash
 # Start with custom bind address and ports
-export RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0"
-export RUSTY_SOCKS_SOCKS5_PORT="1081"
-export RUSTY_SOCKS_HTTP_PORT="8081"
-rusty-socks --config config.yml
+export RUST_SOCKSD_BIND_ADDRESS="0.0.0.0"
+export RUST_SOCKSD_SOCKS5_PORT="1081"
+export RUST_SOCKSD_HTTP_PORT="8081"
+rust-socksd --config config.yml
 
 # Start with debug logging
-export RUSTY_SOCKS_LOG_LEVEL="debug"
-rusty-socks --config config.yml
+export RUST_SOCKSD_LOG_LEVEL="debug"
+rust-socksd --config config.yml
 
 # Override specific settings via command line (takes highest precedence)
-RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0" rusty-socks --socks5-port 1082 --config config.yml
+RUST_SOCKSD_BIND_ADDRESS="0.0.0.0" rust-socksd --socks5-port 1082 --config config.yml
 ```
 
 ## Docker Support
 
-Rusty SOCKS provides official Docker support with multi-stage builds for optimal security and performance.
+rust-socksd provides official Docker support with multi-stage builds for optimal security and performance.
 
 ### Quick Start with Docker
 
@@ -368,24 +368,24 @@ Rusty SOCKS provides official Docker support with multi-stage builds for optimal
 ```bash
 # Pull and run the latest image
 docker run -d \
-  --name rusty-socks \
+  --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  ghcr.io/quintusl/rusty-socks:latest
+  ghcr.io/quintusl/rust-socksd:latest
 ```
 
 #### Building from Source
 
 ```bash
 # Build the Docker image
-docker build -t rusty-socks .
+docker build -t rust-socksd .
 
 # Run the container
 docker run -d \
-  --name rusty-socks \
+  --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  rusty-socks
+  rust-socksd
 ```
 
 ### Docker Configuration
@@ -394,14 +394,14 @@ docker run -d \
 
 ```bash
 docker run -d \
-  --name rusty-socks \
+  --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  -e RUSTY_SOCKS_BIND_ADDRESS="0.0.0.0" \
-  -e RUSTY_SOCKS_SOCKS5_PORT="1080" \
-  -e RUSTY_SOCKS_HTTP_PORT="8080" \
-  -e RUSTY_SOCKS_LOG_LEVEL="info" \
-  rusty-socks
+  -e RUST_SOCKSD_BIND_ADDRESS="0.0.0.0" \
+  -e RUST_SOCKSD_SOCKS5_PORT="1080" \
+  -e RUST_SOCKSD_HTTP_PORT="8080" \
+  -e RUST_SOCKSD_LOG_LEVEL="info" \
+  rust-socksd
 ```
 
 #### Using Custom Configuration Files
@@ -411,18 +411,18 @@ docker run -d \
 mkdir -p ./config
 
 # Generate default configuration
-docker run --rm -v ./config:/config rusty-socks --generate-config /config/config.yml
+docker run --rm -v ./config:/config rust-socksd --generate-config /config/config.yml
 
 # Edit the configuration file
 nano ./config/config.yml
 
 # Run with custom configuration
 docker run -d \
-  --name rusty-socks \
+  --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
   -v ./config:/config \
-  rusty-socks --config /config/config.yml
+  rust-socksd --config /config/config.yml
 ```
 
 #### Docker Compose
@@ -431,15 +431,15 @@ docker run -d \
 version: '3.8'
 
 services:
-  rusty-socks:
-    image: ghcr.io/quintusl/rusty-socks:latest
-    container_name: rusty-socks
+  rust-socksd:
+    image: ghcr.io/quintusl/rust-socksd:latest
+    container_name: rust-socksd
     ports:
       - "1080:1080"  # SOCKS5 port
       - "8080:8080"  # HTTP proxy port
     environment:
-      - RUSTY_SOCKS_BIND_ADDRESS=0.0.0.0
-      - RUSTY_SOCKS_LOG_LEVEL=info
+      - RUST_SOCKSD_BIND_ADDRESS=0.0.0.0
+      - RUST_SOCKSD_LOG_LEVEL=info
     volumes:
       - ./config:/config  # Optional: mount config directory
     restart: unless-stopped
@@ -463,7 +463,7 @@ The Docker image includes several security enhancements:
 The package includes a systemd service file that provides:
 
 - Automatic startup on boot
-- Proper user isolation (runs as `rusty-socks` user)
+- Proper user isolation (runs as `rust-socksd` user)
 - Security hardening (restricted filesystem access, no new privileges)
 - Service restart on failure
 - Proper logging integration
@@ -471,16 +471,16 @@ The package includes a systemd service file that provides:
 Service management:
 ```bash
 # Start the service
-sudo systemctl start rusty-socks
+sudo systemctl start rust-socksd
 
 # Enable automatic startup
-sudo systemctl enable rusty-socks
+sudo systemctl enable rust-socksd
 
 # Check status
-sudo systemctl status rusty-socks
+sudo systemctl status rust-socksd
 
 # View logs
-sudo journalctl -u rusty-socks -f
+sudo journalctl -u rust-socksd -f
 ```
 
 ## Building Packages
@@ -499,14 +499,14 @@ dpkg-buildpackage -b
 
 ```bash
 # Build from AUR
-git clone https://aur.archlinux.org/rusty-socks.git
-cd rusty-socks
+git clone https://aur.archlinux.org/rust-socksd.git
+cd rust-socksd
 makepkg -si
 ```
 
 ## Performance
 
-Rusty SOCKS is designed for high performance:
+rust-socksd is designed for high performance:
 
 - **Async Architecture**: Built on tokio for efficient I/O handling
 - **Zero-copy Operations**: Minimal memory allocations during data transfer
@@ -542,7 +542,7 @@ Security features include:
 
 Enable debug logging:
 ```bash
-rusty-socks --config config.yml --verbose
+rust-socksd --config config.yml --verbose
 ```
 
 Or set in configuration:
@@ -556,10 +556,10 @@ logging:
 Check system logs:
 ```bash
 # Systemd service logs
-sudo journalctl -u rusty-socks
+sudo journalctl -u rust-socksd
 
 # Application logs (if file logging enabled)
-sudo tail -f /var/log/rusty-socks/rusty-socks.log
+sudo tail -f /var/log/rust-socksd/rust-socksd.log
 ```
 
 ## License
@@ -577,4 +577,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Support
 
-For issues, questions, or feature requests, please visit our [GitHub Issues](https://github.com/quintusl/rusty-socks/issues) page.
+For issues, questions, or feature requests, please visit our [GitHub Issues](https://github.com/quintusl/rust-socksd/issues) page.

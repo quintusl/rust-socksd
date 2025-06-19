@@ -1,4 +1,4 @@
-# Rusty SOCKS Proxy Server Configuration
+# rust-socksd Proxy Server Configuration
 # This is the main configuration file for the proxy server
 
 server:
@@ -37,7 +37,7 @@ logging:
   level: "info"
 
   # Log file path (optional, set to null to disable file logging)
-  file: "/var/log/rusty-socks/rusty-socks.log"
+  file: "/var/log/rust-socksd/rust-socksd.log"
 
   # Enable console logging
   console: false

@@ -4,28 +4,28 @@ set -e
 case "$1" in
     purge)
         # Stop and disable the service
-        systemctl stop rusty-socks.service || true
-        systemctl disable rusty-socks.service || true
+        systemctl stop rust-socksd.service || true
+        systemctl disable rust-socksd.service || true
         systemctl daemon-reload
 
         # Remove user and group
-        if getent passwd rusty-socks >/dev/null; then
-            deluser rusty-socks
+        if getent passwd rust-socksd >/dev/null; then
+            deluser rust-socksd
         fi
 
-        if getent group rusty-socks >/dev/null; then
-            delgroup rusty-socks
+        if getent group rust-socksd >/dev/null; then
+            delgroup rust-socksd
         fi
 
         # Remove configuration and log directories
-        rm -rf /etc/rusty-socks
-        rm -rf /var/log/rusty-socks
-        rm -rf /var/lib/rusty-socks
+        rm -rf /etc/rust-socksd
+        rm -rf /var/log/rust-socksd
+        rm -rf /var/lib/rust-socksd
         ;;
 
     remove)
-        systemctl stop rusty-socks.service || true
-        systemctl disable rusty-socks.service || true
+        systemctl stop rust-socksd.service || true
+        systemctl disable rust-socksd.service || true
         ;;
 esac
 
