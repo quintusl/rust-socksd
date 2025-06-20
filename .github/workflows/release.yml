@@ -186,3 +186,41 @@ jobs:
           DEB_PATH: ${{ steps.package_info.outputs.deb_path }}
         run: |
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.DEB_PATH }}"
+
+  aur-publish:
+    permissions:
+      contents: read
+    needs:
+      - create_gh_release
+      - build_and_upload_source_archive
+    if: '!github.event.prerelease'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends git gettext-base
+
+      - name: Generate PKGBUILD
+        env:
+          PKG_VERSION: ${{ needs.create_gh_release.outputs.version }}
+          TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
+          PKGBUILD_TEMPLATE_PATH: ./AUR/PKGBUILD.in
+          PKGBUILD_PATH: ./AUR/PKGBUILD
+        run: |
+          export PROJECT_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
+          echo "Generating PKGBUILD at $PKGBUILD_PATH"
+          /usr/bin/envsubst < "$PKGBUILD_TEMPLATE_PATH" > "$PKGBUILD_PATH"
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: my-awesome-package
+          pkgbuild: ./AUR/PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
