@@ -187,7 +187,8 @@ jobs:
         run: |
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.DEB_PATH }}"
 
-  aur-publish:
+  aur_publish:
+    name: "Publish Arch Linux source package to AUR"
     permissions:
       contents: read
     needs:
@@ -212,7 +213,9 @@ jobs:
         run: |
           export PROJECT_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
           echo "Generating PKGBUILD at $PKGBUILD_PATH"
-          /usr/bin/envsubst < "$PKGBUILD_TEMPLATE_PATH" > "$PKGBUILD_PATH"
+          /usr/bin/envsubst '${PROJECT_NAME} ${PKG_VERSION}' < "$PKGBUILD_TEMPLATE_PATH" > "$PKGBUILD_PATH"
+          echo ""
+          cat "$PKGBUILD_PATH"
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
