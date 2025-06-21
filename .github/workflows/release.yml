@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: write # Required to create releases and upload assets
     outputs:
+      pkg_name: ${{ steps.get_version.outputs.pkg_name }}
       version: ${{ steps.get_version.outputs.version }}
       tag_name: ${{ github.ref_name }}
     steps:
@@ -21,17 +22,21 @@ jobs:
       - name: Get version from tag
         id: get_version
         # Example: v1.0.0 -> 1.0.0
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          export PKG_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
+          echo "pkg_name=${PKG_NAME}" >> $GITHUB_OUTPUT
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         id: create_release_step
         env:
+          PKG_NAME: ${{ steps.get_version.outputs.pkg_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           gh release create ${{ github.ref_name }} \
             --title "Release ${{ github.ref_name }}" \
-            --notes "Automated release for rust-socksd version ${{ env.VERSION }}.
+            --notes "Automated release for ${{ env.PKG_NAME }} version ${{ env.VERSION }}.
           See CHANGELOG.md for details (if available).
           Assets will be uploaded by subsequent jobs." \
             --draft=false \
@@ -52,13 +57,13 @@ jobs:
       - name: Create source archive
         id: create_source_archive
         env:
+          PKG_NAME: ${{ needs.create_gh_release.outputs.pkg_name }}
           VERSION: ${{ needs.create_gh_release.outputs.version }}
           TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
         run: |
-          PROJECT_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
-          ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}.tar.gz"
+          ARCHIVE_NAME="${{ env.PKG_NAME }}-${VERSION}.tar.gz"
           # Create archive from the tagged commit, ensuring it extracts to a versioned directory
-          git archive --format=tar.gz --prefix="${PROJECT_NAME}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
+          git archive --format=tar.gz --prefix="${{ env.PKG_NAME }}-${VERSION}/" -o "${ARCHIVE_NAME}" "${TAG_NAME}"
           echo "archive_path=${PWD}/${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           echo "Created archive: ${ARCHIVE_NAME}"
           if [ -z "${PWD}/${ARCHIVE_NAME}" ]; then
@@ -168,10 +173,12 @@ jobs:
 
       - name: Get package name and path
         id: package_info
+        env:
+          PKG_NAME: ${{ needs.build_and_upload_source_archive.outputs.pkg_name }}
         run: |
-          DEB_PATH=$(find ../ -name "rust-socksd_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
+          DEB_PATH=$(find ../ -name "${{env.PKG_NAME}}_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
           if [ -z "$DEB_PATH" ]; then
-            echo "::error::Could not find .deb package for ${{ matrix.arch }} matching 'rust-socksd_*_${{ matrix.arch }}.deb'"
+            echo "::error::Could not find .deb package for ${{ matrix.arch }} matching '${{env.PKG_NAME}}_*_${{ matrix.arch }}.deb'"
             echo "Listing contents of potential directories:"
             ls -l ../ || echo "target/debian does not exist or is empty"
             exit 1
@@ -206,21 +213,21 @@ jobs:
 
       - name: Generate PKGBUILD
         env:
+          PKG_NAME: ${{ needs.create_gh_release.outputs.pkg_name }}
           PKG_VERSION: ${{ needs.create_gh_release.outputs.version }}
           TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
           PKGBUILD_TEMPLATE_PATH: ./AUR/PKGBUILD.in
           PKGBUILD_PATH: ./AUR/PKGBUILD
         run: |
-          export PROJECT_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
           echo "Generating PKGBUILD at $PKGBUILD_PATH"
-          /usr/bin/envsubst '${PROJECT_NAME} ${PKG_VERSION}' < "$PKGBUILD_TEMPLATE_PATH" > "$PKGBUILD_PATH"
+          /usr/bin/envsubst '${PKG_NAME} ${PKG_VERSION}' < "$PKGBUILD_TEMPLATE_PATH" > "$PKGBUILD_PATH"
           echo ""
           cat "$PKGBUILD_PATH"
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
-          pkgname: my-awesome-package
+          pkgname: ${{ needs.create_gh_release.outputs.pkg_name }}
           pkgbuild: ./AUR/PKGBUILD
           assets: |
             ./AUR/*.install

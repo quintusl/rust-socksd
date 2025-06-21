@@ -1,5 +1,5 @@
 # Maintainer: Quintus Leung <quintusl@gmail.com>
-pkgname=${PROJECT_NAME}
+pkgname=${PKG_NAME}
 pkgver=${PKG_VERSION}
 pkgrel=1
 pkgdesc="A high-performance SOCKS5 and HTTP proxy server written in Rust"
