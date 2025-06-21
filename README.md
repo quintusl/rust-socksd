@@ -19,6 +19,7 @@ A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring moder
 ### Installation
 
 #### From Source
+
 ```bash
 git clone https://github.com/quintusl/rust-socksd.git
 cd rust-socksd
@@ -27,45 +28,38 @@ sudo cp target/release/rust-socksd /usr/local/bin/
 ```
 
 #### Debian/Ubuntu
+
 ```bash
-sudo dpkg -i rust-socksd_0.1.0-1_amd64.deb
+sudo dpkg -i rust-socksd_0.1.1-1_amd64.deb
 ```
 
 #### Arch Linux
+
 ```bash
 yay -S rust-socksd
 ```
 
 #### Docker
+
 ```bash
 # Pull and run the latest Docker image
 docker run -d \
   --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  ghcr.io/quintusl/rust-socksd:latest
-```
-
-### Configuration
-
-Generate a default configuration file:
-```bash
-rust-socksd --generate-config config.yml
-```
-
-Edit the configuration file to suit your needs:
-```bash
-nano config.yml
+  quintux/rust-socksd:latest
 ```
 
 ### Running
 
-#### Direct execution:
+#### Direct execution
+
 ```bash
 rust-socksd --config config.yml
 ```
 
-#### As a systemd service:
+#### As a systemd service
+
 ```bash
 sudo systemctl enable rust-socksd
 sudo systemctl start rust-socksd
@@ -74,6 +68,18 @@ sudo systemctl start rust-socksd
 ## Configuration
 
 The server is configured using a YAML file. See `config.yml.example` for a complete example with all options.
+
+Generate a default configuration file:
+
+```bash
+rust-socksd --generate-config config.yml
+```
+
+Edit the configuration file to suit your needs:
+
+```bash
+nano config.yml
+```
 
 ### Basic Configuration
 
@@ -114,12 +120,14 @@ auth:
 Users are managed separately from the main configuration using the `user` subcommand:
 
 ##### Initialize User Configuration
+
 ```bash
 # Create a new user configuration file
 rust-socksd user init --user-config users.yml --hash-type argon2
 ```
 
 ##### Add Users
+
 ```bash
 # Add a new user (will prompt for password)
 rust-socksd user add --user-config users.yml username
@@ -132,6 +140,7 @@ rust-socksd user add --user-config users.yml --hash-type bcrypt username
 ```
 
 ##### Manage Existing Users
+
 ```bash
 # List all users
 rust-socksd user list --user-config users.yml
@@ -150,13 +159,14 @@ rust-socksd user remove --user-config users.yml username
 #### Password Security
 
 rust-socksd uses secure password hashing with support for:
+
 - **Argon2** (default, recommended)
-- **bcrypt** 
+- **bcrypt**
 - **scrypt**
 
 Passwords are never stored in plain text and use cryptographically secure salt generation.
 
-### Security
+### Security configuration
 
 Configure network restrictions and domain blocking:
 
@@ -178,11 +188,13 @@ security:
 ### SOCKS5 Proxy
 
 Configure your applications to use the SOCKS5 proxy:
+
 - **Host**: Your server IP
 - **Port**: 1080 (default)
 - **Authentication**: Username/password (if enabled)
 
 Example with curl:
+
 ```bash
 curl --socks5-hostname localhost:1080 https://httpbin.org/ip
 ```
@@ -190,10 +202,12 @@ curl --socks5-hostname localhost:1080 https://httpbin.org/ip
 ### HTTP Proxy
 
 Configure your applications to use the HTTP proxy:
+
 - **Host**: Your server IP
 - **Port**: 8080 (default)
 
 Example with curl:
+
 ```bash
 curl --proxy localhost:8080 https://httpbin.org/ip
 ```
@@ -202,7 +216,7 @@ curl --proxy localhost:8080 https://httpbin.org/ip
 
 ### Main Command
 
-```
+```bash
 rust-socksd [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
@@ -226,7 +240,7 @@ SUBCOMMANDS:
 
 Validate configuration files for syntax and consistency:
 
-```
+```bash
 rust-socksd validate [OPTIONS]
 
 OPTIONS:
@@ -235,6 +249,7 @@ OPTIONS:
 ```
 
 Examples:
+
 ```bash
 # Validate main configuration
 rust-socksd validate
@@ -247,7 +262,7 @@ rust-socksd validate --config /etc/rust-socksd/config.yml --user-config /etc/rus
 
 Manage user accounts with secure password hashing:
 
-```
+```bash
 rust-socksd user [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
@@ -265,7 +280,8 @@ SUBCOMMANDS:
 #### User Subcommand Details
 
 ##### Initialize User Config
-```
+
+```bash
 rust-socksd user init [OPTIONS]
 
 OPTIONS:
@@ -274,7 +290,8 @@ OPTIONS:
 ```
 
 ##### Add User
-```
+
+```bash
 rust-socksd user add [OPTIONS] <USERNAME> [PASSWORD]
 
 ARGUMENTS:
@@ -287,7 +304,8 @@ OPTIONS:
 ```
 
 ##### Remove User
-```
+
+```bash
 rust-socksd user remove [OPTIONS] <USERNAME>
 
 ARGUMENTS:
@@ -298,7 +316,8 @@ OPTIONS:
 ```
 
 ##### List Users
-```
+
+```bash
 rust-socksd user list [OPTIONS]
 
 OPTIONS:
@@ -306,7 +325,8 @@ OPTIONS:
 ```
 
 ##### Update User Password
-```
+
+```bash
 rust-socksd user update [OPTIONS] <USERNAME> [PASSWORD]
 
 ARGUMENTS:
@@ -318,7 +338,8 @@ OPTIONS:
 ```
 
 ##### Enable/Disable User
-```
+
+```bash
 rust-socksd user enable [OPTIONS] <USERNAME> <ENABLED>
 
 ARGUMENTS:
@@ -371,7 +392,7 @@ docker run -d \
   --name rust-socksd \
   -p 1080:1080 \
   -p 8080:8080 \
-  ghcr.io/quintusl/rust-socksd:latest
+  quintux/rust-socksd:latest
 ```
 
 #### Building from Source
@@ -401,7 +422,7 @@ docker run -d \
   -e RUST_SOCKSD_SOCKS5_PORT="1080" \
   -e RUST_SOCKSD_HTTP_PORT="8080" \
   -e RUST_SOCKSD_LOG_LEVEL="info" \
-  rust-socksd
+  quintux/rust-socksd:latest
 ```
 
 #### Using Custom Configuration Files
@@ -411,7 +432,7 @@ docker run -d \
 mkdir -p ./config
 
 # Generate default configuration
-docker run --rm -v ./config:/config rust-socksd --generate-config /config/config.yml
+docker run --rm -v ./config:/config quintux/rust-socksd:latest --generate-config /config/config.yml
 
 # Edit the configuration file
 nano ./config/config.yml
@@ -422,7 +443,7 @@ docker run -d \
   -p 1080:1080 \
   -p 8080:8080 \
   -v ./config:/config \
-  rust-socksd --config /config/config.yml
+  quintux/rust-socksd:latest --config /config/config.yml
 ```
 
 #### Docker Compose
@@ -432,7 +453,7 @@ version: '3.8'
 
 services:
   rust-socksd:
-    image: ghcr.io/quintusl/rust-socksd:latest
+    image: quintux/rust-socksd:latest
     container_name: rust-socksd
     ports:
       - "1080:1080"  # SOCKS5 port
@@ -469,6 +490,7 @@ The package includes a systemd service file that provides:
 - Proper logging integration
 
 Service management:
+
 ```bash
 # Start the service
 sudo systemctl start rust-socksd
@@ -492,7 +514,7 @@ sudo journalctl -u rust-socksd -f
 sudo apt-get install debhelper-compat cargo rustc
 
 # Build the package
-dpkg-buildpackage -b
+dpkg-buildpackage -b -uc -us
 ```
 
 ### Arch Package
@@ -514,6 +536,7 @@ rust-socksd is designed for high performance:
 - **Configurable Limits**: Tunable for your specific use case
 
 Typical performance on modern hardware:
+
 - **Throughput**: 1000+ concurrent connections
 - **Latency**: Sub-millisecond proxy overhead
 - **Memory**: ~10MB base memory usage
@@ -541,11 +564,13 @@ Security features include:
 ### Debugging
 
 Enable debug logging:
+
 ```bash
 rust-socksd --config config.yml --verbose
 ```
 
 Or set in configuration:
+
 ```yaml
 logging:
   level: "debug"
@@ -554,6 +579,7 @@ logging:
 ### Logs
 
 Check system logs:
+
 ```bash
 # Systemd service logs
 sudo journalctl -u rust-socksd
