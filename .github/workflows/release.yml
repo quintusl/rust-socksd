@@ -174,7 +174,7 @@ jobs:
       - name: Get package name and path
         id: package_info
         env:
-          PKG_NAME: ${{ needs.build_and_upload_source_archive.outputs.pkg_name }}
+          PKG_NAME: ${{ needs.create_gh_release.outputs.pkg_name }}
         run: |
           DEB_PATH=$(find ../ -name "${{env.PKG_NAME}}_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
           if [ -z "$DEB_PATH" ]; then
