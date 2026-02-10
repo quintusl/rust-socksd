@@ -13,6 +13,8 @@ pub struct Config {
     pub auth: AuthConfig,
     pub logging: LoggingConfig,
     pub security: SecurityConfig,
+    #[serde(skip)]
+    pub loaded_user_config: Option<UserConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +93,7 @@ impl Default for Config {
                 max_request_size: 1024 * 1024,
                 rate_limit: None,
             },
+            loaded_user_config: None,
         }
     }
 }
@@ -98,7 +101,16 @@ impl Default for Config {
 impl Config {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&content)?;
+        let mut config: Config = serde_yaml::from_str(&content)?;
+        
+        if config.auth.enabled {
+            if let Some(user_config_path) = &config.auth.user_config_file {
+                 // Try to resolve relative path against config file location or CWD
+                 let user_config = UserConfig::load_from_file(user_config_path)?;
+                 config.loaded_user_config = Some(user_config);
+            }
+        }
+
         config.validate()?;
         info!("Configuration loaded successfully");
         Ok(config)
@@ -167,19 +179,20 @@ impl Config {
             return Ok(true);
         }
 
-        if let Some(user_config_path) = &self.auth.user_config_file {
-            let user_config = UserConfig::load_from_file(user_config_path)?;
+        if let Some(user_config) = &self.loaded_user_config {
             Ok(user_config.verify_password(username, password))
         } else {
-            Err(anyhow!("Authentication enabled but no user config file specified"))
+             // Fallback if config wasn't loaded properly (e.g. manually constructed config)
+            if let Some(user_config_path) = &self.auth.user_config_file {
+                let user_config = UserConfig::load_from_file(user_config_path)?;
+                Ok(user_config.verify_password(username, password))
+            } else {
+                Err(anyhow!("Authentication enabled but no user config file specified"))
+            }        
         }
     }
 
     pub fn load_user_config(&self) -> Result<Option<UserConfig>> {
-        if let Some(user_config_path) = &self.auth.user_config_file {
-            Ok(Some(UserConfig::load_from_file(user_config_path)?))
-        } else {
-            Ok(None)
-        }
+        Ok(self.loaded_user_config.clone())
     }
 }

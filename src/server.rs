@@ -3,7 +3,7 @@ use crate::http_proxy::HttpProxyHandler;
 use crate::socks5::{Command, Socks5Handler, Socks5Request, Socks5Response};
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
@@ -70,17 +70,20 @@ impl ProxyServer {
                 Ok((stream, addr)) => {
                     debug!("New SOCKS5 connection from {}", addr);
                     
+                    // Acquire permit before spawning to provide backpressure
+                    let permit = match semaphore.clone().acquire_owned().await {
+                        Ok(p) => p,
+                        Err(_) => {
+                            warn!("Semaphore closed");
+                            return Ok(());
+                        }
+                    };
+
                     let config = Arc::clone(&config);
-                    let semaphore = Arc::clone(&semaphore);
                     
                     tokio::spawn(async move {
-                        let _permit = match semaphore.acquire().await {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                warn!("Failed to acquire connection permit for {}", addr);
-                                return;
-                            }
-                        };
+                        // Hold permit for duration of connection
+                        let _permit = permit;
                         
                         let timeout_duration = Duration::from_secs(config.server.connection_timeout);
                         
@@ -114,17 +117,20 @@ impl ProxyServer {
                 Ok((stream, addr)) => {
                     debug!("New HTTP connection from {}", addr);
                     
+                    // Acquire permit before spawning to provide backpressure
+                    let permit = match semaphore.clone().acquire_owned().await {
+                        Ok(p) => p,
+                        Err(_) => {
+                            warn!("Semaphore closed");
+                            return Ok(());
+                        }
+                    };
+
                     let config = Arc::clone(&config);
-                    let semaphore = Arc::clone(&semaphore);
                     
                     tokio::spawn(async move {
-                        let _permit = match semaphore.acquire().await {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                warn!("Failed to acquire connection permit for {}", addr);
-                                return;
-                            }
-                        };
+                        // Hold permit for duration of connection
+                        let _permit = permit;
                         
                         let timeout_duration = Duration::from_secs(config.server.connection_timeout);
                         
@@ -211,16 +217,23 @@ impl ProxyServer {
         Self::relay_data(client_stream, target_stream).await
     }
     
-    async fn handle_http_connection(mut stream: TcpStream, _config: Arc<Config>) -> Result<()> {
-        let handler = HttpProxyHandler;
+    async fn handle_http_connection(stream: TcpStream, config: Arc<Config>) -> Result<()> {
+        let handler = HttpProxyHandler::new(config);
         
-        let request = handler.handle_request(&mut stream).await?;
+        let mut buf_stream = BufReader::new(stream);
+        
+        let request = handler.handle_request(&mut buf_stream).await?;
+        
+        if !handler.validate_auth(&request).await {
+             handler.send_error_response(&mut buf_stream, 407, "Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"Proxy\"").await?;
+             return Ok(());
+        }
         
         if request.is_connect() {
             let (host, port) = request.get_host_port()?;
-            handler.handle_connect(&mut stream, &host, port).await
+            handler.handle_connect(&mut buf_stream, &host, port).await
         } else {
-            handler.handle_regular_proxy(&mut stream, &request).await
+            handler.handle_regular_proxy(&mut buf_stream, &request).await
         }
     }
     

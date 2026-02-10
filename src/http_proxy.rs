@@ -1,8 +1,12 @@
 use anyhow::{anyhow, Result};
+use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use std::sync::Arc;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
+
+use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
@@ -67,17 +71,31 @@ impl HttpRequest {
     }
 }
 
-pub struct HttpProxyHandler;
+pub struct HttpProxyHandler {
+    config: Arc<Config>,
+}
 
 impl HttpProxyHandler {
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
+    }
+
     pub async fn handle_request<T>(&self, stream: &mut T) -> Result<HttpRequest>
     where
-        T: AsyncRead + AsyncWrite + Unpin,
+        T: AsyncBufRead + AsyncWrite + Unpin,
     {
-        let mut buf_reader = BufReader::new(stream);
         let mut line = String::new();
         
-        buf_reader.read_line(&mut line).await?;
+        // Enforce max request size roughly by limiting bytes read
+        let max_size = self.config.security.max_request_size;
+        let mut total_bytes_read = 0;
+
+        // Read request line
+        let bytes_read = stream.read_line(&mut line).await?;
+        total_bytes_read += bytes_read;
+        if total_bytes_read > max_size {
+             return Err(anyhow!("Request size exceeds limit"));
+        }
         
         if line.is_empty() {
             return Err(anyhow!("Empty HTTP request line"));
@@ -99,8 +117,13 @@ impl HttpProxyHandler {
         let mut headers = HashMap::new();
         loop {
             line.clear();
-            let bytes_read = buf_reader.read_line(&mut line).await?;
+            let bytes_read = stream.read_line(&mut line).await?;
+            total_bytes_read += bytes_read;
             
+            if total_bytes_read > max_size {
+                 return Err(anyhow!("Request size exceeds limit"));
+            }
+
             if bytes_read == 0 {
                 break;
             }
@@ -125,6 +148,45 @@ impl HttpProxyHandler {
             version,
             headers,
         })
+    }
+
+    pub async fn validate_auth(&self, request: &HttpRequest) -> bool {
+        if !self.config.auth.enabled {
+            return true;
+        }
+
+        let auth_header = match request.headers.get("proxy-authorization") {
+            Some(h) => h,
+            None => return false,
+        };
+
+        if !auth_header.starts_with("Basic ") {
+            return false;
+        }
+
+        let encoded = &auth_header[6..];
+        let decoded = match general_purpose::STANDARD.decode(encoded) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+
+        let credentials = String::from_utf8_lossy(&decoded);
+        let parts: Vec<&str> = credentials.splitn(2, ':').collect();
+
+        if parts.len() != 2 {
+            return false;
+        }
+
+        let username = parts[0];
+        let password = parts[1];
+
+        match self.config.validate_user(username, password) {
+             Ok(valid) => valid,
+             Err(e) => {
+                 warn!("Authentication error for user '{}': {}", username, e);
+                 false
+             }
+        }
     }
     
     pub async fn handle_connect<T>(&self, client: &mut T, target_host: &str, target_port: u16) -> Result<()>
@@ -160,7 +222,7 @@ impl HttpProxyHandler {
         let mut request_data = format!("{} {} {}\r\n", request.method, request.uri, request.version);
         
         for (name, value) in &request.headers {
-            if name != "proxy-connection" {
+            if name != "proxy-connection" && name != "proxy-authorization" {
                 request_data.push_str(&format!("{}: {}\r\n", name, value));
             }
         }
