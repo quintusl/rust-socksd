@@ -68,18 +68,11 @@ pub enum Address {
 }
 
 impl Address {
-    pub async fn to_socket_addr(&self, port: u16) -> Result<SocketAddr> {
+    pub async fn resolve(&self, resolver: &trust_dns_resolver::TokioAsyncResolver, port: u16) -> Result<SocketAddr> {
         match self {
             Address::IPv4(ip) => Ok(SocketAddr::from((*ip, port))),
             Address::IPv6(ip) => Ok(SocketAddr::from((*ip, port))),
             Address::DomainName(domain) => {
-                use trust_dns_resolver::{TokioAsyncResolver, config::*};
-                
-                let resolver = TokioAsyncResolver::tokio(
-                    ResolverConfig::default(),
-                    ResolverOpts::default(),
-                );
-                
                 let response = resolver.lookup_ip(domain.as_str()).await?;
                 
                 if let Some(ip) = response.iter().next() {

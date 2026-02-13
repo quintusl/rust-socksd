@@ -195,7 +195,7 @@ impl HttpProxyHandler {
     {
         debug!("Establishing CONNECT tunnel to {}:{}", target_host, target_port);
         
-        let target_stream = TcpStream::connect((target_host, target_port)).await
+        let mut target_stream = TcpStream::connect((target_host, target_port)).await
             .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
         
         let response = "HTTP/1.1 200 Connection Established\r\n\r\n";
@@ -203,7 +203,7 @@ impl HttpProxyHandler {
         
         debug!("CONNECT tunnel established to {}:{}", target_host, target_port);
         
-        self.relay_data(client, target_stream).await?;
+        self.relay_data(client, &mut target_stream).await?;
         
         Ok(())
     }
@@ -230,41 +230,25 @@ impl HttpProxyHandler {
         
         target_stream.write_all(request_data.as_bytes()).await?;
         
-        self.relay_data(client, target_stream).await?;
+        self.relay_data(client, &mut target_stream).await?;
         
         Ok(())
     }
     
-    async fn relay_data<C, T>(&self, client: C, target: T) -> Result<()>
+    async fn relay_data<C, T>(&self, client: &mut C, target: &mut T) -> Result<()>
     where
-        C: AsyncRead + AsyncWrite + Unpin,
-        T: AsyncRead + AsyncWrite + Unpin,
+        C: AsyncRead + AsyncWrite + Unpin + ?Sized,
+        T: AsyncRead + AsyncWrite + Unpin + ?Sized,
     {
-        let (mut client_read, mut client_write) = tokio::io::split(client);
-        let (mut target_read, mut target_write) = tokio::io::split(target);
-        
-        let client_to_target = async {
-            let result = tokio::io::copy(&mut client_read, &mut target_write).await;
-            let _ = target_write.shutdown().await;
-            result
-        };
-        
-        let target_to_client = async {
-            let result = tokio::io::copy(&mut target_read, &mut client_write).await;
-            let _ = client_write.shutdown().await;
-            result
-        };
-        
-        let (result1, result2) = tokio::join!(client_to_target, target_to_client);
-        
-        match (result1, result2) {
-            (Ok(bytes1), Ok(bytes2)) => {
+        match tokio::io::copy_bidirectional(client, target).await {
+            Ok((bytes1, bytes2)) => {
                 debug!("Data relay completed: {} bytes client->target, {} bytes target->client", bytes1, bytes2);
                 Ok(())
             }
-            (Err(e), _) | (_, Err(e)) => {
+            Err(e) => {
                 debug!("Data relay error: {}", e);
-                Err(anyhow!("Data relay failed: {}", e))
+                // Don't propagate relay errors as they're expected when connections close
+                Ok(())
             }
         }
     }

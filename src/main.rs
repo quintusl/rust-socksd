@@ -257,11 +257,21 @@ async fn main() -> Result<()> {
         info!("Configuration file {} not found, using defaults", config_path);
     };
 
+use trust_dns_resolver::{TokioAsyncResolver, config::*};
+use std::sync::Arc;
+
+// ... (existing imports)
+
     info!("Starting rust-socksd proxy server");
     info!("SOCKS5 will listen on {}:{}", config.server.bind_address, config.server.socks5_port);
     info!("HTTP proxy will listen on {}:{}", config.server.bind_address, config.server.http_port);
 
-    let server = ProxyServer::new(config);
+    let resolver = Arc::new(TokioAsyncResolver::tokio(
+        ResolverConfig::default(),
+        ResolverOpts::default(),
+    ));
+
+    let server = ProxyServer::new(config, resolver);
 
     if let Err(e) = server.start().await {
         error!("Server error: {}", e);

@@ -11,16 +11,23 @@ WORKDIR /app
 # Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
-# Download dependencies.
-# This layer is cached and re-run only if Cargo.toml or Cargo.lock change.
-RUN cargo fetch
+# Create dummy main.rs to build dependencies
+RUN mkdir src && \
+    echo "fn main() {println!(\"if you see this, the build broke\")}" > src/main.rs
+
+# Build dependencies - this will be cached
+RUN cargo build --release --locked
+
+# Remove dummy main.rs
+RUN rm src/main.rs
 
 # Copy source code
-# This layer is cached and re-run only if files in src/ change.
 COPY src ./src
 
+# Touch main.rs to force rebuild of the app
+RUN touch src/main.rs
+
 # Build the application in release mode
-# This step uses downloaded/cached dependencies.
 RUN cargo build --release --locked
 
 # Stage 2: Create the final lightweight image

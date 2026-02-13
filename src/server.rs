@@ -3,23 +3,26 @@ use crate::http_proxy::HttpProxyHandler;
 use crate::socks5::{Command, Socks5Handler, Socks5Request, Socks5Response};
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
-use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
 use tracing::{debug, error, info, warn};
+use trust_dns_resolver::TokioAsyncResolver;
 
 pub struct ProxyServer {
     config: Arc<Config>,
     connection_semaphore: Arc<Semaphore>,
+    resolver: Arc<TokioAsyncResolver>,
 }
 
 impl ProxyServer {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, resolver: Arc<TokioAsyncResolver>) -> Self {
         let max_connections = config.server.max_connections;
         Self {
             config: Arc::new(config),
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
+            resolver,
         }
     }
     
@@ -37,11 +40,14 @@ impl ProxyServer {
         let config2 = Arc::clone(&self.config);
         let semaphore1 = Arc::clone(&self.connection_semaphore);
         let semaphore2 = Arc::clone(&self.connection_semaphore);
+        let resolver = Arc::clone(&self.resolver);
         
+        // SOCKS5 server task
         let socks5_task = tokio::spawn(async move {
-            Self::run_socks5_server(socks5_listener, config1, semaphore1).await
+            Self::run_socks5_server(socks5_listener, config1, semaphore1, resolver).await
         });
         
+        // HTTP server task
         let http_task = tokio::spawn(async move {
             Self::run_http_server(http_listener, config2, semaphore2).await
         });
@@ -64,6 +70,7 @@ impl ProxyServer {
         listener: TcpListener,
         config: Arc<Config>,
         semaphore: Arc<Semaphore>,
+        resolver: Arc<TokioAsyncResolver>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
@@ -80,6 +87,7 @@ impl ProxyServer {
                     };
 
                     let config = Arc::clone(&config);
+                    let resolver = Arc::clone(&resolver);
                     
                     tokio::spawn(async move {
                         // Hold permit for duration of connection
@@ -89,7 +97,7 @@ impl ProxyServer {
                         
                         let result = timeout(
                             timeout_duration,
-                            Self::handle_socks5_connection(stream, config)
+                            Self::handle_socks5_connection(stream, config, resolver)
                         ).await;
                         
                         match result {
@@ -154,7 +162,11 @@ impl ProxyServer {
         }
     }
     
-    async fn handle_socks5_connection(mut stream: TcpStream, config: Arc<Config>) -> Result<()> {
+    async fn handle_socks5_connection(
+        mut stream: TcpStream, 
+        config: Arc<Config>,
+        resolver: Arc<TokioAsyncResolver>
+    ) -> Result<()> {
         let handler = Socks5Handler::new(config.clone());
         
         let auth_required = config.auth.enabled;
@@ -166,7 +178,7 @@ impl ProxyServer {
         
         match request.command {
             Command::Connect => {
-                Self::handle_socks5_connect(stream, request, handler).await
+                Self::handle_socks5_connect(stream, request, handler, resolver).await
             }
             Command::Bind => {
                 let response = Socks5Response::new_error(0x07); // Command not supported
@@ -185,8 +197,9 @@ impl ProxyServer {
         mut client_stream: TcpStream,
         request: Socks5Request,
         handler: Socks5Handler,
+        resolver: Arc<TokioAsyncResolver>
     ) -> Result<()> {
-        let target_addr = match request.address.to_socket_addr(request.port).await {
+        let target_addr = match request.address.resolve(&resolver, request.port).await {
             Ok(addr) => addr,
             Err(e) => {
                 warn!("Failed to resolve target address: {}", e);
@@ -229,40 +242,25 @@ impl ProxyServer {
              return Ok(());
         }
         
+        let mut stream = buf_stream.into_inner();
         if request.is_connect() {
             let (host, port) = request.get_host_port()?;
-            handler.handle_connect(&mut buf_stream, &host, port).await
+            handler.handle_connect(&mut stream, &host, port).await
         } else {
-            handler.handle_regular_proxy(&mut buf_stream, &request).await
+            handler.handle_regular_proxy(&mut stream, &request).await
         }
     }
     
-    async fn relay_data(client: TcpStream, target: TcpStream) -> Result<()> {
-        let (mut client_read, mut client_write) = client.into_split();
-        let (mut target_read, mut target_write) = target.into_split();
-        
-        let client_to_target = async {
-            let result = tokio::io::copy(&mut client_read, &mut target_write).await;
-            let _ = target_write.shutdown().await;
-            result
-        };
-        
-        let target_to_client = async {
-            let result = tokio::io::copy(&mut target_read, &mut client_write).await;
-            let _ = client_write.shutdown().await;
-            result
-        };
-        
-        let (result1, result2) = tokio::join!(client_to_target, target_to_client);
-        
-        match (result1, result2) {
-            (Ok(bytes1), Ok(bytes2)) => {
-                debug!("Data relay completed: {} bytes client->target, {} bytes target->client", bytes1, bytes2);
-                Ok(())
-            }
-            (Err(e), _) | (_, Err(e)) => {
-                debug!("Data relay error: {}", e);
-                Ok(()) // Don't propagate relay errors as they're expected when connections close
+    async fn relay_data(mut client: TcpStream, mut target: TcpStream) -> Result<()> {
+        match tokio::io::copy_bidirectional(&mut client, &mut target).await {
+            Ok((bytes1, bytes2)) => {
+                 debug!("Data relay completed: {} bytes client->target, {} bytes target->client", bytes1, bytes2);
+                 Ok(())
+            },
+            Err(e) => {
+                 debug!("Data relay error: {}", e);
+                 // We don't return an error here as connection resets are common in proxying
+                 Ok(())
             }
         }
     }
