@@ -271,7 +271,7 @@ use std::sync::Arc;
         ResolverOpts::default(),
     ));
 
-    let server = ProxyServer::new(config, resolver);
+    let server = ProxyServer::create(config, resolver).await?;
 
     if let Err(e) = server.start().await {
         error!("Server error: {}", e);

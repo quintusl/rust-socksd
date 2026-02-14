@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for AI agents when working with code in this repository.
 
 ## Project Overview
 
@@ -8,8 +8,8 @@ rust-socksd is a high-performance SOCKS5 and HTTP proxy server written in Rust w
 
 - **Dual Protocol Support**: SOCKS5 and HTTP proxy protocols running on separate ports
 - **Async Architecture**: Built on tokio with concurrent connection handling 
-- **Authentication System**: Separate user configuration with secure password hashing (Argon2, bcrypt, scrypt)
-- **Configuration Management**: YAML-based main config with separate user management
+- **Modular Authentication**: Support for File-based, PAM, LDAP, and Database (MySQL/PostgreSQL) backends
+- **Configuration Management**: YAML-based main config with modular backend setup
 - **Security Features**: Network restrictions, domain blocking, rate limiting
 - **Multi-level CLI**: Main server + user management + validation subcommands
 
@@ -18,49 +18,57 @@ rust-socksd is a high-performance SOCKS5 and HTTP proxy server written in Rust w
 ### Main Components
 
 - `src/main.rs` - CLI argument parsing, logging setup, and application entry point
-- `src/server.rs` - ProxyServer orchestrates both SOCKS5 and HTTP listeners with connection pooling
-- `src/socks5.rs` - SOCKS5 protocol implementation with authentication support  
-- `src/http_proxy.rs` - HTTP proxy handler for CONNECT and regular proxy requests
-- `src/config/` - Configuration management split between main config and user config
+- `src/server.rs` - `ProxyServer` orchestrates SOCKS5/HTTP listeners and initializes the `Authenticator`
+- `src/socks5.rs` - SOCKS5 protocol implementation using `Authenticator` trait
+- `src/http_proxy.rs` - HTTP proxy handler with `Authenticator` support (Basic Auth)
+- `src/auth/` - Modular authentication system:
+  - `mod.rs`: `Authenticator` trait definition
+  - `simple.rs`: File-based auth (Argon2/Bcrypt/Scrypt)
+  - `pam.rs`: PAM integration (feature-gated)
+  - `ldap.rs`: LDAP integration
+  - `sql.rs`: Database integration (sqlx)
+- `src/config.rs` - Configuration structs including `AuthBackendConfig` enum
 - `src/lib.rs` - Public API exports
 
 ### Configuration Architecture
 
-The project uses a split configuration approach:
-- **Main config** (`config.yml`) - Server settings, auth config, logging, security rules
-- **User config** (`users.yml`) - Separate file for user accounts with hashed passwords
-- Both configs have validation and CLI management commands
+The project uses a structured configuration approach:
+- **Main config** (`config.yml`) - Server settings, auth backend selection, logging, security
+- **Auth Backends**:
+  - `simple`: Uses independent `users.yml` file
+  - `pam`: Uses system PAM service
+  - `ldap`: Uses LDAP directory
+  - `database`: Uses SQL connection string
+- Config validation ensures required fields for selected backend are present
 
 ### Connection Flow
 
-1. `ProxyServer::start()` spawns two concurrent listeners (SOCKS5 + HTTP)
-2. Each connection acquires a semaphore permit for connection limiting
-3. Connections are handled with configurable timeouts
-4. SOCKS5: handshake → authentication → request → tunnel establishment
-5. HTTP: request parsing → CONNECT handling or regular proxy forwarding
-6. Data relay using bidirectional tokio::io::copy for tunnel connections
+1. `ProxyServer::create()` initializes the configured `Authenticator` (async)
+2. `ProxyServer::start()` spawns SOCKS5 and HTTP listeners
+3. Each connection acquires a semaphore permit
+4. **SOCKS5**: Handshake -> `Authenticator::authenticate()` -> Request -> Tunnel
+5. **HTTP**: Request parsing -> `Authenticator::authenticate()` (Basic Auth) -> CONNECT/Proxy
+6. Data relay using `tokio::io::copy_bidirectional`
 
 ## Development Commands
 
 ### Building and Running
 ```bash
-# Build release binary
+# Build release binary (includes PAM by default)
 cargo build --release
+
+# Build without PAM (useful for macOS/cross-compilation issues)
+cargo build --release --no-default-features
 
 # Run with custom config
 cargo run -- --config config.yml
-
-# Generate default config
-cargo run -- --generate-config config.yml
-
-# Enable debug logging
-cargo run -- --config config.yml --verbose
 ```
 
 ### Testing
 ```bash
 # Run unit tests
 cargo test
+```
 
 # Test with tokio-test features
 cargo test --features tokio-test

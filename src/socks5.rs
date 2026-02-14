@@ -122,13 +122,18 @@ impl Socks5Response {
     }
 }
 
+use crate::auth::Authenticator;
+
+// ...
+
 pub struct Socks5Handler {
-    config: Arc<Config>,
+    _config: Arc<Config>,
+    authenticator: Option<Arc<dyn Authenticator>>,
 }
 
 impl Socks5Handler {
-    pub fn new(config: Arc<Config>) -> Self {
-        Self { config }
+    pub fn new(config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Self {
+        Self { _config: config, authenticator }
     }
     pub async fn handle_handshake<T>(&self, stream: &mut T, auth_required: bool) -> Result<bool>
     where
@@ -210,7 +215,7 @@ impl Socks5Handler {
         
         debug!("Auth attempt - username: {}", username);
         
-        let auth_success = self.validate_credentials(&username, &password);
+        let auth_success = self.validate_credentials(&username, &password).await;
         
         let response = [0x01, if auth_success { 0x00 } else { 0x01 }];
         stream.write_all(&response).await?;
@@ -222,13 +227,17 @@ impl Socks5Handler {
         }
     }
     
-    fn validate_credentials(&self, username: &str, password: &str) -> bool {
-        match self.config.validate_user(username, password) {
-            Ok(valid) => valid,
-            Err(e) => {
-                warn!("Authentication error for user '{}': {}", username, e);
-                false
+    async fn validate_credentials(&self, username: &str, password: &str) -> bool {
+        if let Some(auth) = &self.authenticator {
+            match auth.authenticate(username, password).await {
+                Ok(valid) => valid,
+                Err(e) => {
+                    warn!("Authentication error for user '{}': {}", username, e);
+                    false
+                }
             }
+        } else {
+            false
         }
     }
     

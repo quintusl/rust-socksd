@@ -101,70 +101,69 @@ logging:
 ```
 
 ### Authentication
+rust-socksd supports multiple authentication backends to secure your proxy.
 
-rust-socksd supports secure username/password authentication using separate configuration files for enhanced security. Users are managed through dedicated CLI commands with secure password hashing.
+#### Supported Backends
 
-#### Enabling Authentication
+1. **Simple (File-based)**: Uses a local YAML file with secure password hashes (Argon2, Bcrypt, Scrypt).
+2. **PAM**: Integrates with Linux Pluggable Authentication Modules (e.g., system users).
+3. **LDAP**: Authenticates against an LDAP directory (e.g., Active Directory, OpenLDAP).
+4. **Database**: Authenticates against a MySQL or PostgreSQL database.
 
-To enable authentication in your main configuration:
+#### Configuration Examples
+
+##### 1. Simple (File-based)
 
 ```yaml
 auth:
   enabled: true
-  method: "username_password"
-  user_config_file: "users.yml"
+  type: simple
+  user_config_file: "config/users.yml"
 ```
 
-#### User Management
-
-Users are managed separately from the main configuration using the `user` subcommand:
-
-##### Initialize User Configuration
-
+Manage users via CLI:
 ```bash
-# Create a new user configuration file
-rust-socksd user init --user-config users.yml --hash-type argon2
+rust-socksd user add --user-config config/users.yml myuser
 ```
 
-##### Add Users
+##### 2. PAM
 
-```bash
-# Add a new user (will prompt for password)
-rust-socksd user add --user-config users.yml username
+Authenticate using system users (requires running as root or with appropriate permissions):
 
-# Add user with password specified
-rust-socksd user add --user-config users.yml username password
-
-# Specify hash type (argon2, bcrypt, scrypt)
-rust-socksd user add --user-config users.yml --hash-type bcrypt username
+```yaml
+auth:
+  enabled: true
+  type: pam
+  service: "socksd" # config file in /etc/pam.d/socksd
 ```
 
-##### Manage Existing Users
+##### 3. LDAP
 
-```bash
-# List all users
-rust-socksd user list --user-config users.yml
-
-# Update user password
-rust-socksd user update --user-config users.yml username
-
-# Enable/disable a user
-rust-socksd user enable --user-config users.yml username true
-rust-socksd user enable --user-config users.yml username false
-
-# Remove a user
-rust-socksd user remove --user-config users.yml username
+```yaml
+auth:
+  enabled: true
+  type: ldap
+  url: "ldap://ldap.example.com:389"
+  base_dn: "ou=users,dc=example,dc=com"
+  # Optional binding for search
+  bind_dn: "cn=admin,dc=example,dc=com"
+  bind_password: "admin_password"
+  user_filter: "(uid={})" # {} is replaced by the username
 ```
 
-#### Password Security
+##### 4. Database (MySQL/PostgreSQL)
 
-rust-socksd uses secure password hashing with support for:
+Authenticate by fetching a password hash from a database. The hash is verified using the same secure algorithms as the Simple backend.
 
-- **Argon2** (default, recommended)
-- **bcrypt**
-- **scrypt**
-
-Passwords are never stored in plain text and use cryptographically secure salt generation.
+```yaml
+auth:
+  enabled: true
+  type: database
+  db_type: "mysql" # or "postgres"
+  url: "mysql://socksd:password@localhost/socksd_db"
+  query: "SELECT password_hash FROM users WHERE username = ?"
+  hash_type: "argon2" # argon2, bcrypt, or scrypt
+```
 
 ### Security configuration
 
@@ -597,7 +596,17 @@ This project is licensed under either of
 
 at your option.
 
-## Contributing
+### Build Features
+
+The project supports the following Cargo features:
+
+- **pam-auth** (default): Enables PAM authentication backend. Requires `libpam` development headers.
+  - *Note for macOS*: This feature may require `llvm` to be installed (`brew install llvm`) for `bindgen`. If you encounter build errors, you can disable this feature.
+
+To build without PAM support:
+```bash
+cargo build --release --no-default-features
+```
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 

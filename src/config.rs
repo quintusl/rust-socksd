@@ -13,8 +13,6 @@ pub struct Config {
     pub auth: AuthConfig,
     pub logging: LoggingConfig,
     pub security: SecurityConfig,
-    #[serde(skip)]
-    pub loaded_user_config: Option<UserConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,16 +28,45 @@ pub struct ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     pub enabled: bool,
-    pub method: AuthMethod,
-    pub user_config_file: Option<String>,
+    #[serde(flatten)]
+    pub backend: AuthBackendConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AuthMethod {
+#[serde(tag = "type")]
+pub enum AuthBackendConfig {
+    #[serde(rename = "simple")]
+    Simple {
+        user_config_file: String,
+    },
+    #[cfg(feature = "pam-auth")]
+    #[serde(rename = "pam")]
+    Pam {
+        service: String,
+    },
+    #[serde(rename = "ldap")]
+    Ldap {
+        url: String,
+        base_dn: String,
+        bind_dn: Option<String>,
+        bind_password: Option<String>,
+        user_filter: String,
+    },
+    #[serde(rename = "database")]
+    Database {
+        db_type: String,
+        url: String,
+        query: String,
+        hash_type: HashType,
+    },
     #[serde(rename = "none")]
     None,
-    #[serde(rename = "username_password")]
-    UsernamePassword,
+}
+
+impl Default for AuthBackendConfig {
+    fn default() -> Self {
+        AuthBackendConfig::None
+    }
 }
 
 
@@ -78,8 +105,7 @@ impl Default for Config {
             },
             auth: AuthConfig {
                 enabled: false,
-                method: AuthMethod::None,
-                user_config_file: None,
+                backend: AuthBackendConfig::None,
             },
             logging: LoggingConfig {
                 level: "info".to_string(),
@@ -93,7 +119,6 @@ impl Default for Config {
                 max_request_size: 1024 * 1024,
                 rate_limit: None,
             },
-            loaded_user_config: None,
         }
     }
 }
@@ -101,16 +126,8 @@ impl Default for Config {
 impl Config {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let mut config: Config = serde_yaml::from_str(&content)?;
+        let config: Config = serde_yaml::from_str(&content)?;
         
-        if config.auth.enabled {
-            if let Some(user_config_path) = &config.auth.user_config_file {
-                 // Try to resolve relative path against config file location or CWD
-                 let user_config = UserConfig::load_from_file(user_config_path)?;
-                 config.loaded_user_config = Some(user_config);
-            }
-        }
-
         config.validate()?;
         info!("Configuration loaded successfully");
         Ok(config)
@@ -146,8 +163,42 @@ impl Config {
             return Err(anyhow!("Buffer size must be at least 1024 bytes"));
         }
 
-        if self.auth.enabled && self.auth.user_config_file.is_none() {
-            return Err(anyhow!("Authentication enabled but no user config file specified"));
+        if self.auth.enabled {
+             match &self.auth.backend {
+                 AuthBackendConfig::Simple { user_config_file } => {
+                     if user_config_file.is_empty() {
+                         return Err(anyhow!("Authentication enabled (simple) but no user config file specified"));
+                     }
+                 },
+                 #[cfg(feature = "pam-auth")]
+                 AuthBackendConfig::Pam { service } => {
+                     if service.is_empty() {
+                         return Err(anyhow!("PAM service name cannot be empty"));
+                     }
+                 },
+                 AuthBackendConfig::Ldap { url, base_dn, user_filter, .. } => {
+                     if url.is_empty() {
+                         return Err(anyhow!("LDAP URL cannot be empty"));
+                     }
+                     if base_dn.is_empty() {
+                         return Err(anyhow!("LDAP Base DN cannot be empty"));
+                     }
+                     if user_filter.is_empty() {
+                         return Err(anyhow!("LDAP User Filter cannot be empty"));
+                     }
+                 },
+                 AuthBackendConfig::Database { url, query, .. } => {
+                     if url.is_empty() {
+                         return Err(anyhow!("Database URL cannot be empty"));
+                     }
+                     if query.is_empty() {
+                         return Err(anyhow!("Database query cannot be empty"));
+                     }
+                 },
+                 AuthBackendConfig::None => {
+                     return Err(anyhow!("Authentication enabled but backend is configured as None"));
+                 }
+             }
         }
 
         for network in &self.security.allowed_networks {
@@ -172,27 +223,5 @@ impl Config {
     pub fn http_bind_addr(&self) -> Result<SocketAddr> {
         let addr = format!("{}:{}", self.server.bind_address, self.server.http_port);
         addr.parse().map_err(|e| anyhow!("Failed to parse HTTP bind address: {}", e))
-    }
-
-    pub fn validate_user(&self, username: &str, password: &str) -> Result<bool> {
-        if !self.auth.enabled {
-            return Ok(true);
-        }
-
-        if let Some(user_config) = &self.loaded_user_config {
-            Ok(user_config.verify_password(username, password))
-        } else {
-             // Fallback if config wasn't loaded properly (e.g. manually constructed config)
-            if let Some(user_config_path) = &self.auth.user_config_file {
-                let user_config = UserConfig::load_from_file(user_config_path)?;
-                Ok(user_config.verify_password(username, password))
-            } else {
-                Err(anyhow!("Authentication enabled but no user config file specified"))
-            }        
-        }
-    }
-
-    pub fn load_user_config(&self) -> Result<Option<UserConfig>> {
-        Ok(self.loaded_user_config.clone())
     }
 }

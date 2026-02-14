@@ -21,15 +21,46 @@ server:
   buffer_size: 65536
 
 # Authentication settings
+# Authentication settings
 auth:
   # Enable authentication (true/false)
   enabled: false
 
-  # Authentication method: "none" or "username_password"
-  method: "none"
+  # Authentication Backend Configuration
+  # ------------------------------------
+  
+  # Type: 'simple' (File-based), 'pam', 'ldap', 'database', 'none'
+  type: simple
+  
+  # --- Simple Backend ---
+  # Path to user configuration file
+  user_config_file: "config/users.yml"
 
-  # Path to user configuration file (required if auth is enabled)
-  user_config_file: "users.yml"
+  # --- PAM Backend ---
+  # Service name for PAM (e.g., 'login', 'sudo', 'socksd')
+  # service: "socksd"
+
+  # --- LDAP Backend ---
+  # LDAP Connection URL
+  # url: "ldap://localhost:389"
+  # Base DN for user search
+  # base_dn: "ou=users,dc=example,dc=com"
+  # Bind DN (optional, for searching if anonymous bind is disabled)
+  # bind_dn: "cn=admin,dc=example,dc=com"
+  # Bind Password (optional)
+  # bind_password: "password"
+  # User Filter ({} is replaced by username)
+  # user_filter: "(uid={})"
+
+  # --- Database Backend (MySQL/PostgreSQL) ---
+  # Database Type: 'mysql' or 'postgres'
+  # db_type: "mysql"
+  # Database URL
+  # url: "mysql://user:pass@localhost/socksd"
+  # Query to fetch password hash (must return single column)
+  # query: "SELECT password_hash FROM users WHERE username = ?"
+  # Hash Type: 'argon2', 'bcrypt', 'scrypt'
+  # hash_type: "argon2"
 
 # Logging configuration
 logging:

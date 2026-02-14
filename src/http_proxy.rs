@@ -71,13 +71,18 @@ impl HttpRequest {
     }
 }
 
+use crate::auth::Authenticator;
+
+// ...
+
 pub struct HttpProxyHandler {
     config: Arc<Config>,
+    authenticator: Option<Arc<dyn Authenticator>>,
 }
 
 impl HttpProxyHandler {
-    pub fn new(config: Arc<Config>) -> Self {
-        Self { config }
+    pub fn new(config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Self {
+        Self { config, authenticator }
     }
 
     pub async fn handle_request<T>(&self, stream: &mut T) -> Result<HttpRequest>
@@ -180,12 +185,16 @@ impl HttpProxyHandler {
         let username = parts[0];
         let password = parts[1];
 
-        match self.config.validate_user(username, password) {
-             Ok(valid) => valid,
-             Err(e) => {
-                 warn!("Authentication error for user '{}': {}", username, e);
-                 false
-             }
+        if let Some(auth) = &self.authenticator {
+            match auth.authenticate(username, password).await {
+                Ok(valid) => valid,
+                Err(e) => {
+                    warn!("Authentication error for user '{}': {}", username, e);
+                    false
+                }
+            }
+        } else {
+            false
         }
     }
     

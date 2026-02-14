@@ -32,6 +32,13 @@ argon2 = "0.5"
 bcrypt = "0.15"
 scrypt = "0.11"
 chrono = { version = "0.4", features = ["serde"] }
+pam = { version = "0.7", optional = true }
+ldap3 = "0.12"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "mysql", "postgres", "any"] }
+
+[features]
+default = ["pam-auth"]
+pam-auth = ["dep:pam"]
 
 [dev-dependencies]
 tokio-test = "0.4"

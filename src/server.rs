@@ -1,6 +1,9 @@
-use crate::config::Config;
+use crate::config::{Config, AuthBackendConfig};
 use crate::http_proxy::HttpProxyHandler;
 use crate::socks5::{Command, Socks5Handler, Socks5Request, Socks5Response};
+use crate::auth::{Authenticator, simple::SimpleAuthenticator, ldap::LdapAuthenticator, sql::SqlAuthenticator};
+#[cfg(feature = "pam-auth")]
+use crate::auth::pam::PamAuthenticator;
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 use tokio::io::BufReader;
@@ -14,16 +17,40 @@ pub struct ProxyServer {
     config: Arc<Config>,
     connection_semaphore: Arc<Semaphore>,
     resolver: Arc<TokioAsyncResolver>,
+    authenticator: Option<Arc<dyn Authenticator>>,
 }
 
 impl ProxyServer {
-    pub fn new(config: Config, resolver: Arc<TokioAsyncResolver>) -> Self {
+    pub async fn create(config: Config, resolver: Arc<TokioAsyncResolver>) -> Result<Self> {
         let max_connections = config.server.max_connections;
-        Self {
+        
+        let authenticator: Option<Arc<dyn Authenticator>> = if config.auth.enabled {
+             match &config.auth.backend {
+                 AuthBackendConfig::Simple { user_config_file } => {
+                     Some(Arc::new(SimpleAuthenticator::load_from_file(user_config_file)?))
+                 },
+                 #[cfg(feature = "pam-auth")]
+                 AuthBackendConfig::Pam { service } => {
+                     Some(Arc::new(PamAuthenticator::new(service)))
+                 },
+                 AuthBackendConfig::Ldap { url, base_dn, bind_dn, bind_password, user_filter } => {
+                     Some(Arc::new(LdapAuthenticator::new(url, base_dn, bind_dn.clone(), bind_password.clone(), user_filter)))
+                 },
+                 AuthBackendConfig::Database { db_type, url, query, hash_type } => {
+                     Some(Arc::new(SqlAuthenticator::new(db_type, url, query, hash_type.clone()).await?))
+                 },
+                 AuthBackendConfig::None => None,
+             }
+        } else {
+             None
+        };
+
+        Ok(Self {
             config: Arc::new(config),
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
             resolver,
-        }
+            authenticator,
+        })
     }
     
     pub async fn start(&self) -> Result<()> {
@@ -41,15 +68,17 @@ impl ProxyServer {
         let semaphore1 = Arc::clone(&self.connection_semaphore);
         let semaphore2 = Arc::clone(&self.connection_semaphore);
         let resolver = Arc::clone(&self.resolver);
+        let authenticator1 = self.authenticator.clone();
+        let authenticator2 = self.authenticator.clone();
         
         // SOCKS5 server task
         let socks5_task = tokio::spawn(async move {
-            Self::run_socks5_server(socks5_listener, config1, semaphore1, resolver).await
+            Self::run_socks5_server(socks5_listener, config1, semaphore1, resolver, authenticator1).await
         });
         
         // HTTP server task
         let http_task = tokio::spawn(async move {
-            Self::run_http_server(http_listener, config2, semaphore2).await
+            Self::run_http_server(http_listener, config2, semaphore2, authenticator2).await
         });
         
         tokio::select! {
@@ -71,6 +100,7 @@ impl ProxyServer {
         config: Arc<Config>,
         semaphore: Arc<Semaphore>,
         resolver: Arc<TokioAsyncResolver>,
+        authenticator: Option<Arc<dyn Authenticator>>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
@@ -88,6 +118,7 @@ impl ProxyServer {
 
                     let config = Arc::clone(&config);
                     let resolver = Arc::clone(&resolver);
+                    let authenticator = authenticator.clone();
                     
                     tokio::spawn(async move {
                         // Hold permit for duration of connection
@@ -97,7 +128,7 @@ impl ProxyServer {
                         
                         let result = timeout(
                             timeout_duration,
-                            Self::handle_socks5_connection(stream, config, resolver)
+                            Self::handle_socks5_connection(stream, config, resolver, authenticator)
                         ).await;
                         
                         match result {
@@ -119,6 +150,7 @@ impl ProxyServer {
         listener: TcpListener,
         config: Arc<Config>,
         semaphore: Arc<Semaphore>,
+        authenticator: Option<Arc<dyn Authenticator>>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
@@ -135,6 +167,7 @@ impl ProxyServer {
                     };
 
                     let config = Arc::clone(&config);
+                    let authenticator = authenticator.clone();
                     
                     tokio::spawn(async move {
                         // Hold permit for duration of connection
@@ -144,7 +177,7 @@ impl ProxyServer {
                         
                         let result = timeout(
                             timeout_duration,
-                            Self::handle_http_connection(stream, config)
+                            Self::handle_http_connection(stream, config, authenticator)
                         ).await;
                         
                         match result {
@@ -165,9 +198,10 @@ impl ProxyServer {
     async fn handle_socks5_connection(
         mut stream: TcpStream, 
         config: Arc<Config>,
-        resolver: Arc<TokioAsyncResolver>
+        resolver: Arc<TokioAsyncResolver>,
+        authenticator: Option<Arc<dyn Authenticator>>,
     ) -> Result<()> {
-        let handler = Socks5Handler::new(config.clone());
+        let handler = Socks5Handler::new(config.clone(), authenticator);
         
         let auth_required = config.auth.enabled;
         if !handler.handle_handshake(&mut stream, auth_required).await? {
@@ -230,8 +264,8 @@ impl ProxyServer {
         Self::relay_data(client_stream, target_stream).await
     }
     
-    async fn handle_http_connection(stream: TcpStream, config: Arc<Config>) -> Result<()> {
-        let handler = HttpProxyHandler::new(config);
+    async fn handle_http_connection(stream: TcpStream, config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Result<()> {
+        let handler = HttpProxyHandler::new(config, authenticator);
         
         let mut buf_stream = BufReader::new(stream);
         
