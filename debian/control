@@ -2,7 +2,7 @@ Source: rust-socksd
 Section: net
 Priority: optional
 Maintainer: Quintus Leung <quintusl@gmail.com>
-Build-Depends: debhelper-compat (= 13), cargo, rustc
+Build-Depends: debhelper-compat (= 13), cargo, rustc, pkg-config, libssl-dev, libpam0g-dev
 Standards-Version: 4.6.0
 Homepage: https://github.com/quintusl/rust-socksd
 Vcs-Git: https://github.com/quintusl/rust-socksd.git
