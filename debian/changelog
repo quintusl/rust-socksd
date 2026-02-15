@@ -1,3 +1,14 @@
+rust-socksd (0.2.0-1) unstable; urgency=medium
+
+  * Add changelog script.
+  * Fix docker build.
+  * More auth. methods.
+  * Performance optimization.
+  * Clean-up markdowns.
+  * Security audit by Gemini.
+
+ -- Quintus Leung <quintusl@gmail.com>  Sun, 15 Feb 2026 17:47:25 +0000
+
 rust-socksd (0.1.1-1) unstable; urgency=medium
 
   * Rename project to rust-socksd
