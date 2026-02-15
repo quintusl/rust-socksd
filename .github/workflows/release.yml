@@ -81,118 +81,57 @@ jobs:
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.ARCHIVE_PATH }}"
 
   build_debian_packages:
-    name: Build Debian Package (${{ matrix.arch }})
+    name: Build Debian Package
     runs-on: ubuntu-latest
     needs: create_gh_release
     permissions:
-      contents: write # Required to upload assets (read permission is implicit for checkout)
+      contents: write
     strategy:
-      fail-fast: false # Allow other matrix jobs to continue if one fails
+      fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            arch: amd64
-            # No specific linker needed for amd64 on amd64 runner
-          - target: aarch64-unknown-linux-gnu
-            arch: arm64
-            linker: aarch64-linux-gnu-gcc
-            rustflags: '["-C", "target-feature=+crt-static"]'
-          - target: armv7-unknown-linux-gnueabihf
-            arch: armhf
-            linker: '/opt/rpi_tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc'
-            rustflags: '["-C", "target-feature=+crt-static"]'
-
+          - arch: amd64
+            qemu_arch: x86_64
+          - arch: arm64
+            qemu_arch: aarch64
+          - arch: armhf
+            qemu_arch: armv7
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for ARM builds)
-        if: matrix.arch == 'arm64' || matrix.arch == 'armhf'
-        uses: docker/setup-qemu-action@v3
+      - name: Build Debian Package on ${{ matrix.arch }}
+        uses: uraimo/run-on-arch-action@v2
         with:
-          platforms: ${{ matrix.arch == 'arm64' && 'arm64' || matrix.arch == 'armhf' && 'arm' || '' }}
-
-      - name: Install Rust toolchain for target ${{ matrix.target }}
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install compilation dependencies (for amd64)
-        if: matrix.arch == 'amd64'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends debhelper-compat rustup pkg-config libssl-dev libpam0g-dev
-          rustup -q update
-
-      - name: Install cross-compilation dependencies (for ARMhf)
-        if: matrix.arch == 'armhf'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends debhelper-compat rustup gcc-arm-linux-gnueabihf libc6-dev-armhf-cross pkg-config libssl-dev libpam0g-dev
-          mkdir -p /opt
-          # Download and extract Raspberry Pi cross-compilation tools
-          git clone https://github.com/raspberrypi/tools /opt/rpi_tools
-          rustup target add ${{ matrix.target }}
-          rustup -q update
-
-      - name: Install cross-compilation dependencies (for ARM64)
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends debhelper-compat rustup gcc-aarch64-linux-gnu libc6-dev-arm64-cross pkg-config libssl-dev libpam0g-dev
-          rustup target add ${{ matrix.target }}
-          rustup -q update
-
-      - name: Build Debian package for ${{ matrix.arch }}
-        if: matrix.arch != 'armhf' && matrix.arch != 'arm64'
-        run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
-
-      - name: Build Debian package for armhf
-        if: matrix.arch == 'armhf'
-        env:
-          # Set target for cross-compilation
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
-          # For armhf specifically, ensure we use the right target features
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: 'arm-linux-gnueabihf-gcc'
-          # PKG_CONFIG settings for cross-compilation
-          PKG_CONFIG_ALLOW_CROSS: 1
-          PKG_CONFIG_PATH: '/usr/lib/arm-linux-gnueabihf/pkgconfig'
-        run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
-
-      - name: Build Debian package for arm64
-        if: matrix.arch == 'arm64'
-        env:
-          # Set target for cross-compilation
-          CARGO_BUILD_TARGET: ${{ matrix.target }}
-          # For armhf specifically, ensure we use the right target features
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: 'aarch64-linux-gnu-gcc'
-          # PKG_CONFIG settings for cross-compilation
-          PKG_CONFIG_ALLOW_CROSS: 1
-          PKG_CONFIG_PATH: '/usr/lib/aarch64-linux-gnu/pkgconfig'
-        run: dpkg-buildpackage -b -d -uc -us --host-arch ${{ matrix.arch }}
-
-      - name: Get package name and path
-        id: package_info
-        env:
-          PKG_NAME: ${{ needs.create_gh_release.outputs.pkg_name }}
-        run: |
-          DEB_PATH=$(find ../ -name "${{env.PKG_NAME}}_*_${{ matrix.arch }}.deb" -print -quit 2>/dev/null)
-          if [ -z "$DEB_PATH" ]; then
-            echo "::error::Could not find .deb package for ${{ matrix.arch }} matching '${{env.PKG_NAME}}_*_${{ matrix.arch }}.deb'"
-            echo "Listing contents of potential directories:"
-            ls -l ../ || echo "target/debian does not exist or is empty"
-            exit 1
-          fi
-          echo "Found deb package: $DEB_PATH"
-          echo "deb_path=${DEB_PATH}" >> $GITHUB_OUTPUT
-          ls -lh "$DEB_PATH"
-
+          arch: ${{ matrix.qemu_arch }}
+          distro: bookworm
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y build-essential debhelper libssl-dev libpam0g-dev pkg-config curl git
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          run: |
+            source $HOME/.cargo/env
+            # Create a subdirectory for the build to ensure artifacts land in the workspace root (dpkg-buildpackage outputs to ../)
+            mkdir -p package-build
+            cp -r . package-build/
+            cd package-build
+            # Build the package (skip dependency check -d because we installed cargo via rustup)
+            dpkg-buildpackage -b -uc -us -d
+      
       - name: Upload Debian package to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEB_PATH: ${{ steps.package_info.outputs.deb_path }}
+          TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
         run: |
-          gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.DEB_PATH }}"
+          # Find the .deb file in the workspace root (parent of package-build)
+          DEB_PATH=$(find . -maxdepth 1 -name "*_${{ matrix.arch }}.deb" -print -quit)
+          if [ -z "$DEB_PATH" ]; then
+            echo "::error::Could not find .deb package for ${{ matrix.arch }}"
+            ls -l
+            exit 1
+          fi
+          echo "Found deb package: $DEB_PATH"
+          gh release upload ${{ env.TAG_NAME }} "$DEB_PATH"
 
   aur_publish:
     name: "Publish Arch Linux source package to AUR"
