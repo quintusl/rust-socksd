@@ -1,10 +1,10 @@
 # Stage 1: Build the application
 # Use a specific Rust version for reproducibility, slim variant for smaller base
-FROM rust:1.87-slim-bookworm AS builder
+FROM rust:1.88-slim-bookworm AS builder
 LABEL maintainer="Quintus Leung"
 
 # Install system dependencies if needed by any crates (e.g., libssl-dev, pkg-config for TLS/crypto)
-# RUN apt-get update && apt-get install -y libssl-dev pkg-config
+RUN apt-get update && apt-get install -y libssl-dev pkg-config libpam0g-dev
 
 WORKDIR /app
 
@@ -32,6 +32,9 @@ RUN cargo build --release --locked
 
 # Stage 2: Create the final lightweight image
 FROM debian:bookworm-slim AS runner
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y libssl3 libpam0g && rm -rf /var/lib/apt/lists/*
 
 # Arguments for user/group creation, can be overridden at build time
 ARG UID=1001
