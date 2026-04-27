@@ -591,10 +591,13 @@ sudo tail -f /var/log/rust-socksd/rust-socksd.log
 
 This project is licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
+- MIT License ([LICENSE-MIT](LICENSE.MIT))
+- Apache License, Version 2.0 ([LICENSE.Apache-2.0](LICENSE.Apachei-2.0))
 
 at your option.
+
+`SPDX-License-Identifier: MIT OR Apache-2.0`
+
 
 ### Build Features
 
