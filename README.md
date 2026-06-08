@@ -189,6 +189,7 @@ security:
   rate_limit:
     requests_per_minute: 1000
     burst_size: 100
+```
 
 ### Upstream Proxy Configuration
 
