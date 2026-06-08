@@ -59,6 +59,17 @@ security:
     - "malicious-site.com"
     - "blocked-domain.net"
 
+  # Allowed egress networks (destination IPs or CIDRs)
+  # If empty, all outbound destinations are allowed (except those blocked by blocked_egress_networks)
+  allowed_egress_networks: []
+  #   - "0.0.0.0/0"
+  #   - "::/0"
+
+  # Blocked egress networks (destination IPs or CIDRs)
+  blocked_egress_networks: []
+  #   - "127.0.0.1/8"
+  #   - "192.168.0.0/16"
+
   # Maximum request size in bytes
   max_request_size: 1048576  # 1MB
 

@@ -129,6 +129,10 @@ pub struct LoggingConfig {
 pub struct SecurityConfig {
     pub allowed_networks: Vec<String>,
     pub blocked_domains: Vec<String>,
+    #[serde(default)]
+    pub allowed_egress_networks: Vec<String>,
+    #[serde(default)]
+    pub blocked_egress_networks: Vec<String>,
     pub max_request_size: usize,
     pub rate_limit: Option<RateLimitConfig>,
 }
@@ -163,6 +167,8 @@ impl Default for Config {
             security: SecurityConfig {
                 allowed_networks: vec!["0.0.0.0/0".to_string()],
                 blocked_domains: vec![],
+                allowed_egress_networks: vec![],
+                blocked_egress_networks: vec![],
                 max_request_size: 1024 * 1024,
                 rate_limit: None,
             },
@@ -253,6 +259,30 @@ impl Config {
             if !network.contains('/') {
                 network.parse::<std::net::IpAddr>()
                     .map_err(|_| anyhow!("Invalid network address: {}", network))?;
+            }
+        }
+
+        for network in &self.security.allowed_egress_networks {
+            if !network.contains('/') {
+                network.parse::<std::net::IpAddr>()
+                    .map_err(|_| anyhow!("Invalid IP address in allowed_egress_networks: {}", network))?;
+            } else {
+                let parts: Vec<&str> = network.split('/').collect();
+                if parts.len() != 2 || parts[0].parse::<std::net::IpAddr>().is_err() || parts[1].parse::<u8>().is_err() {
+                    return Err(anyhow!("Invalid CIDR in allowed_egress_networks: {}", network));
+                }
+            }
+        }
+
+        for network in &self.security.blocked_egress_networks {
+            if !network.contains('/') {
+                network.parse::<std::net::IpAddr>()
+                    .map_err(|_| anyhow!("Invalid IP address in blocked_egress_networks: {}", network))?;
+            } else {
+                let parts: Vec<&str> = network.split('/').collect();
+                if parts.len() != 2 || parts[0].parse::<std::net::IpAddr>().is_err() || parts[1].parse::<u8>().is_err() {
+                    return Err(anyhow!("Invalid CIDR in blocked_egress_networks: {}", network));
+                }
             }
         }
 

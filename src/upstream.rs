@@ -66,6 +66,31 @@ fn match_cidr(ip: IpAddr, cidr: &str) -> bool {
     }
 }
 
+pub fn check_egress_rules(config: &Config, ip: IpAddr) -> bool {
+    // Check blocked egress networks first
+    for network in &config.security.blocked_egress_networks {
+        if match_cidr(ip, network) {
+            return false;
+        }
+    }
+
+    // Check allowed egress networks if not empty
+    if !config.security.allowed_egress_networks.is_empty() {
+        let mut allowed = false;
+        for network in &config.security.allowed_egress_networks {
+            if match_cidr(ip, network) {
+                allowed = true;
+                break;
+            }
+        }
+        if !allowed {
+            return false;
+        }
+    }
+
+    true
+}
+
 pub fn is_excluded(
     host: &str,
     ip: Option<IpAddr>,
@@ -469,17 +494,35 @@ pub async fn connect_to_target(
     if let Ok(ip) = target_host.parse::<IpAddr>() {
         target_ip = Some(ip);
     } else {
+        let has_egress_rules = !config.security.allowed_egress_networks.is_empty()
+            || !config.security.blocked_egress_networks.is_empty();
         let no_proxy = get_no_proxy_list();
         let has_ip_exclusions = config.upstream.exclude_networks.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok())
             || no_proxy.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok());
         
-        if has_ip_exclusions {
+        if has_ip_exclusions || has_egress_rules {
             if let Some(r) = resolver {
                 if let Ok(lookup) = r.lookup_ip(target_host).await {
                     target_ip = lookup.iter().next().map(IpAddr::from);
                 }
             } else if let Ok(mut addrs) = tokio::net::lookup_host(format!("{}:{}", target_host, target_port)).await {
                 target_ip = addrs.next().map(|addr| addr.ip());
+            }
+        }
+    }
+
+    let has_egress_rules = !config.security.allowed_egress_networks.is_empty()
+        || !config.security.blocked_egress_networks.is_empty();
+
+    if has_egress_rules {
+        match target_ip {
+            Some(ip) => {
+                if !check_egress_rules(config, ip) {
+                    return Err(anyhow!("Connection to {}:{} (IP: {}) is blocked by security policy", target_host, target_port, ip));
+                }
+            }
+            None => {
+                return Err(anyhow!("Failed to resolve target host {} to IP address for security check", target_host));
             }
         }
     }
@@ -605,6 +648,43 @@ mod tests {
         assert!(is_excluded("10.0.0.5", ip_no_proxy, &exclude_networks, &exclude_domains, &no_proxy_list));
         assert!(is_excluded("apple.com", None, &exclude_networks, &exclude_domains, &no_proxy_list));
         assert!(is_excluded("sub.apple.com", None, &exclude_networks, &exclude_domains, &no_proxy_list));
+    }
+
+    #[test]
+    fn test_check_egress_rules() {
+        let mut config = Config::default();
+        
+        // Default (empty rules) allows anything
+        assert!(check_egress_rules(&config, "8.8.8.8".parse().unwrap()));
+        assert!(check_egress_rules(&config, "2001:db8::1".parse().unwrap()));
+        
+        // Add blocked egress rules
+        config.security.blocked_egress_networks = vec![
+            "10.0.0.0/8".to_string(),
+            "192.168.1.100".to_string(),
+            "2001:db8::/32".to_string(),
+        ];
+        
+        assert!(!check_egress_rules(&config, "10.1.2.3".parse().unwrap()));
+        assert!(!check_egress_rules(&config, "192.168.1.100".parse().unwrap()));
+        assert!(check_egress_rules(&config, "192.168.1.101".parse().unwrap()));
+        assert!(!check_egress_rules(&config, "2001:db8::1".parse().unwrap()));
+        assert!(check_egress_rules(&config, "2001:db9::1".parse().unwrap()));
+        
+        // Add allowed egress rules (in combination with blocked egress rules)
+        config.security.allowed_egress_networks = vec![
+            "192.168.1.0/24".to_string(),
+            "8.8.8.8".to_string(),
+        ];
+        
+        // 8.8.8.8 matches allowed, not blocked -> allowed
+        assert!(check_egress_rules(&config, "8.8.8.8".parse().unwrap()));
+        // 8.8.4.4 does not match allowed -> blocked
+        assert!(!check_egress_rules(&config, "8.8.4.4".parse().unwrap()));
+        // 192.168.1.100 matches allowed but matches blocked -> blocked
+        assert!(!check_egress_rules(&config, "192.168.1.100".parse().unwrap()));
+        // 192.168.1.50 matches allowed and not blocked -> allowed
+        assert!(check_egress_rules(&config, "192.168.1.50".parse().unwrap()));
     }
 }
 

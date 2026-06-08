@@ -177,6 +177,12 @@ security:
   blocked_domains:
     - "malicious-site.com"
     - "blocked-domain.net"
+  allowed_egress_networks:
+    - "8.8.8.8"
+    - "8.8.4.4"
+  blocked_egress_networks:
+    - "127.0.0.0/8"
+    - "10.0.0.0/8"
   rate_limit:
     requests_per_minute: 1000
     burst_size: 100

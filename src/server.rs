@@ -255,7 +255,12 @@ impl ProxyServer {
             Ok(stream) => stream,
             Err(e) => {
                 warn!("Failed to connect to target {}:{}: {}", target_host, request.port, e);
-                let response = Socks5Response::new_error(0x04); // Host unreachable
+                let reply_code = if e.to_string().contains("blocked by security policy") {
+                    0x02 // Connection not allowed by ruleset
+                } else {
+                    0x04 // Host unreachable
+                };
+                let response = Socks5Response::new_error(reply_code);
                 handler.send_response(&mut client_stream, &response).await?;
                 return Err(anyhow!("Connection to target failed: {}", e));
             }

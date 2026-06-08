@@ -208,14 +208,26 @@ impl HttpProxyHandler {
     {
         debug!("Establishing CONNECT tunnel to {}:{}", target_host, target_port);
         
-        let mut target_stream = crate::upstream::connect_to_target(
+        let target_stream_res = crate::upstream::connect_to_target(
             &self.config,
             target_host,
             target_port,
             false, // is_socks5_request
             Some(&self.resolver),
-        ).await
-        .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
+        ).await;
+
+        let mut target_stream = match target_stream_res {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("Failed to connect to target {}:{}: {}", target_host, target_port, e);
+                if e.to_string().contains("blocked by security policy") {
+                    self.send_error_response(client, 403, "Forbidden: Egress connection blocked by security policy").await?;
+                } else {
+                    self.send_error_response(client, 502, &format!("Bad Gateway: {}", e)).await?;
+                }
+                return Err(e);
+            }
+        };
         
         let response = "HTTP/1.1 200 Connection Established\r\n\r\n";
         client.write_all(response.as_bytes()).await?;
@@ -235,14 +247,26 @@ impl HttpProxyHandler {
         
         debug!("Proxying {} request to {}:{}", request.method, target_host, target_port);
         
-        let mut target_stream = crate::upstream::connect_to_target(
+        let target_stream_res = crate::upstream::connect_to_target(
             &self.config,
             &target_host,
             target_port,
             false, // is_socks5_request
             Some(&self.resolver),
-        ).await
-        .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
+        ).await;
+
+        let mut target_stream = match target_stream_res {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("Failed to connect to target {}:{}: {}", target_host, target_port, e);
+                if e.to_string().contains("blocked by security policy") {
+                    self.send_error_response(client, 403, "Forbidden: Egress connection blocked by security policy").await?;
+                } else {
+                    self.send_error_response(client, 502, &format!("Bad Gateway: {}", e)).await?;
+                }
+                return Err(e);
+            }
+        };
         
         let mut request_data = format!("{} {} {}\r\n", request.method, request.uri, request.version);
         
