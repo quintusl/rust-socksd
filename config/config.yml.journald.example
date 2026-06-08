@@ -1,5 +1,5 @@
-# rust-socksd Proxy Server Configuration
-# This is the main configuration file for the proxy server
+# rust-socksd Proxy Server Configuration (journald optimized)
+# This is the main configuration file for the proxy server configured for systemd journald
 
 server:
   # IP address to bind to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
@@ -25,11 +25,41 @@ auth:
   # Enable authentication (true/false)
   enabled: false
 
-  # Authentication method: "none" or "username_password"
-  method: "none"
+  # Authentication Backend Configuration
+  # ------------------------------------
+  
+  # Type: 'simple' (File-based), 'pam', 'ldap', 'database', 'none'
+  type: simple
+  
+  # --- Simple Backend ---
+  # Path to user configuration file
+  user_config_file: "config/users.yml"
 
-  # Path to user configuration file (required if auth is enabled)
-  user_config_file: "users.yml"
+  # --- PAM Backend ---
+  # Service name for PAM (e.g., 'login', 'sudo', 'socksd')
+  # service: "socksd"
+
+  # --- LDAP Backend ---
+  # LDAP Connection URL
+  # url: "ldap://localhost:389"
+  # Base DN for user search
+  # base_dn: "ou=users,dc=example,dc=com"
+  # Bind DN (optional, for searching if anonymous bind is disabled)
+  # bind_dn: "cn=admin,dc=example,dc=com"
+  # Bind Password (optional)
+  # bind_password: "password"
+  # User Filter ({} is replaced by username)
+  # user_filter: "(uid={})"
+
+  # --- Database Backend (MySQL/PostgreSQL) ---
+  # Database Type: 'mysql' or 'postgres'
+  # db_type: "mysql"
+  # Database URL
+  # url: "mysql://user:pass@localhost/socksd"
+  # Query to fetch password hash (must return single column)
+  # query: "SELECT password_hash FROM users WHERE username = ?"
+  # Hash Type: 'argon2', 'bcrypt', 'scrypt'
+  # hash_type: "argon2"
 
 # Logging configuration
 logging:
@@ -77,3 +107,36 @@ security:
   rate_limit:
     requests_per_minute: 1000
     burst_size: 100
+
+# Upstream Proxy Settings
+# Route outgoing traffic through upstream HTTP or SOCKS5 proxies
+upstream:
+  # Enable upstream proxying (true/false)
+  enabled: false
+
+  # Upstream protocol: 'socks5' or 'http'
+  protocol: socks5
+
+  # Address of the upstream proxy server
+  address: "127.0.0.1"
+
+  # Port of the upstream proxy server
+  port: 1080
+
+  # Upstream proxy credentials (optional)
+  # username: "proxy_user"
+  # password: "proxy_password"
+
+  # Networks to exclude from upstream proxying (CIDR blocks or IPs)
+  exclude_networks:
+    - "127.0.0.1/8"
+    - "10.0.0.0/8"
+
+  # Domains to exclude from upstream proxying (exact or subdomain suffix)
+  exclude_domains:
+    - "localhost"
+    - "local.lan"
+
+  # Respect standard environment variables: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY (true/false)
+  # Environment variables will override configuration settings if present.
+  prefer_env: true

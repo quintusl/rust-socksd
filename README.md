@@ -4,14 +4,15 @@ A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring moder
 
 ## Features
 
-- **Full SOCKS5 Protocol Support**: Complete implementation with authentication
-- **HTTP Proxy**: Support for HTTP/HTTPS with CONNECT method
+- **Full SOCKS5 Protocol Support**: Complete implementation with username/password authentication
+- **HTTP Proxy**: Support for HTTP/HTTPS with CONNECT method, including Basic Authentication support
+- **Upstream Proxy Routing**: Route outgoing traffic through upstream SOCKS5 or HTTP proxies, with support for Basic Authentication, domain/network bypass rules, and environment variables (`ALL_PROXY`, `HTTP_PROXY`, etc.)
 - **Multi-threaded Architecture**: Built on tokio for high concurrency
 - **YAML Configuration**: Flexible and easy-to-use configuration system
-- **Authentication Support**: Username/password authentication for SOCKS5
-- **Security Features**: Network restrictions, domain blocking, rate limiting
-- **Systemd Integration**: Native Linux service support
-- **Comprehensive Logging**: Configurable logging with multiple levels
+- **Modular Authentication Backends**: Secure authentication supporting Simple (file-based Argon2/Bcrypt/Scrypt), PAM, LDAP, and Database (MySQL/PostgreSQL) backends
+- **Security Features**: Source network restrictions, domain blocking, egress destination network filtering, max request size control, and rate limiting
+- **Systemd Integration**: Native Linux service support with journald logging
+- **Comprehensive Logging**: Configurable logging to console, file, and journald with multiple levels
 - **Package Support**: Debian packages and Arch AUR available
 
 ## Quick Start
@@ -93,7 +94,8 @@ server:
 
 auth:
   enabled: false
-  method: "none"
+  type: simple
+  user_config_file: "config/users.yml"
 
 logging:
   level: "info"
@@ -123,7 +125,7 @@ auth:
 
 Manage users via CLI:
 ```bash
-rust-socksd user add --user-config config/users.yml myuser
+rust-socksd user --user-config config/users.yml add myuser
 ```
 
 ##### 2. PAM
@@ -183,9 +185,59 @@ security:
   blocked_egress_networks:
     - "127.0.0.0/8"
     - "10.0.0.0/8"
+  max_request_size: 1048576  # 1MB max request size limit
   rate_limit:
     requests_per_minute: 1000
     burst_size: 100
+
+### Upstream Proxy Configuration
+
+`rust-socksd` can route outgoing client traffic through an upstream SOCKS5 or HTTP proxy server. This is useful for chain-proxying, routing traffic through VPN gateways, or utilizing corporate proxies.
+
+```yaml
+upstream:
+  # Enable upstream proxying (true/false)
+  enabled: true
+
+  # Upstream protocol: 'socks5' or 'http'
+  protocol: socks5
+
+  # Address of the upstream proxy server
+  address: "127.0.0.1"
+
+  # Port of the upstream proxy server
+  port: 1080
+
+  # Upstream proxy credentials (optional basic auth)
+  username: "proxy_user"
+  password: "proxy_password"
+
+  # Networks to exclude from upstream proxying (CIDR blocks or IPs)
+  exclude_networks:
+    - "127.0.0.1/8"
+    - "10.0.0.0/8"
+
+  # Domains to exclude from upstream proxying (exact or subdomain suffix)
+  exclude_domains:
+    - "localhost"
+    - "local.lan"
+
+  # Respect standard environment variables: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY (true/false)
+  # If true, these environment variables will take precedence over options configured above.
+  prefer_env: true
+```
+
+#### Environment Variable Support
+
+When `prefer_env` is set to `true` (default), the proxy server automatically detects and uses standard proxy environment variables. They will override the configuration file.
+
+The environment variables checked are:
+- `ALL_PROXY` or `all_proxy` (highest priority for SOCKS5 or general connections)
+- `HTTPS_PROXY` or `https_proxy` (for secure HTTPS target requests)
+- `HTTP_PROXY` or `http_proxy` (for HTTP target requests)
+- `NO_PROXY` or `no_proxy` (comma/space-separated list of bypass targets)
+
+You can bypass the upstream proxy for specific IP ranges or domain suffixes by using `exclude_networks`, `exclude_domains`, or the standard `NO_PROXY` environment variable. A wildcard `*` in `NO_PROXY` will bypass the upstream proxy for all requests.
 ```
 
 ## Usage
@@ -268,7 +320,7 @@ rust-socksd validate --config /etc/rust-socksd/config.yml --user-config /etc/rus
 Manage user accounts with secure password hashing:
 
 ```bash
-rust-socksd user [OPTIONS] <SUBCOMMAND>
+rust-socksd user [OPTIONS] <SUBCOMMAND> [SUBCOMMAND_ARGS]
 
 OPTIONS:
         --user-config <FILE>         User configuration file path [default: users.yml]
@@ -287,72 +339,58 @@ SUBCOMMANDS:
 ##### Initialize User Config
 
 ```bash
-rust-socksd user init [OPTIONS]
+rust-socksd user [OPTIONS] init [SUB-OPTIONS]
 
-OPTIONS:
+SUB-OPTIONS:
         --hash-type <TYPE>           Default password hash type: argon2, bcrypt, scrypt [default: argon2]
-        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ##### Add User
 
 ```bash
-rust-socksd user add [OPTIONS] <USERNAME> [PASSWORD]
+rust-socksd user [OPTIONS] add [SUB-OPTIONS] <USERNAME> [PASSWORD]
 
 ARGUMENTS:
     <USERNAME>                       Username
     [PASSWORD]                       Password (will prompt if not provided)
 
-OPTIONS:
+SUB-OPTIONS:
         --hash-type <TYPE>           Password hash type: argon2, bcrypt, scrypt [default: argon2]
-        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ##### Remove User
 
 ```bash
-rust-socksd user remove [OPTIONS] <USERNAME>
+rust-socksd user [OPTIONS] remove <USERNAME>
 
 ARGUMENTS:
     <USERNAME>                       Username to remove
-
-OPTIONS:
-        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ##### List Users
 
 ```bash
-rust-socksd user list [OPTIONS]
-
-OPTIONS:
-        --user-config <FILE>         User configuration file path [default: users.yml]
+rust-socksd user [OPTIONS] list
 ```
 
 ##### Update User Password
 
 ```bash
-rust-socksd user update [OPTIONS] <USERNAME> [PASSWORD]
+rust-socksd user [OPTIONS] update <USERNAME> [PASSWORD]
 
 ARGUMENTS:
     <USERNAME>                       Username
     [PASSWORD]                       New password (will prompt if not provided)
-
-OPTIONS:
-        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ##### Enable/Disable User
 
 ```bash
-rust-socksd user enable [OPTIONS] <USERNAME> <ENABLED>
+rust-socksd user [OPTIONS] enable <USERNAME> <ENABLED>
 
 ARGUMENTS:
     <USERNAME>                       Username
     <ENABLED>                        Enable (true) or disable (false)
-
-OPTIONS:
-        --user-config <FILE>         User configuration file path [default: users.yml]
 ```
 
 ## Environment Variables
@@ -598,7 +636,7 @@ sudo tail -f /var/log/rust-socksd/rust-socksd.log
 This project is licensed under either of
 
 - MIT License ([LICENSE-MIT](LICENSE.MIT))
-- Apache License, Version 2.0 ([LICENSE.Apache-2.0](LICENSE.Apachei-2.0))
+- Apache License, Version 2.0 ([LICENSE.Apache-2.0](LICENSE.Apache-2.0))
 
 at your option.
 
