@@ -13,6 +13,53 @@ pub struct Config {
     pub auth: AuthConfig,
     pub logging: LoggingConfig,
     pub security: SecurityConfig,
+    #[serde(default)]
+    pub upstream: UpstreamConfig,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UpstreamProtocol {
+    #[serde(rename = "socks5")]
+    Socks5,
+    #[serde(rename = "http")]
+    Http,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpstreamConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub protocol: Option<UpstreamProtocol>,
+    pub address: Option<String>,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    #[serde(default)]
+    pub exclude_networks: Vec<String>,
+    #[serde(default)]
+    pub exclude_domains: Vec<String>,
+    #[serde(default = "default_prefer_env")]
+    pub prefer_env: bool,
+}
+
+fn default_prefer_env() -> bool {
+    true
+}
+
+impl Default for UpstreamConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            protocol: None,
+            address: None,
+            port: None,
+            username: None,
+            password: None,
+            exclude_networks: vec![],
+            exclude_domains: vec![],
+            prefer_env: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +166,7 @@ impl Default for Config {
                 max_request_size: 1024 * 1024,
                 rate_limit: None,
             },
+            upstream: UpstreamConfig::default(),
         }
     }
 }
@@ -210,6 +258,27 @@ impl Config {
 
         if !["trace", "debug", "info", "warn", "error"].contains(&self.logging.level.as_str()) {
             return Err(anyhow!("Invalid log level: {}", self.logging.level));
+        }
+
+        if self.upstream.enabled {
+            if let Some(_protocol) = &self.upstream.protocol {
+                let address = self.upstream.address.as_deref().unwrap_or("");
+                if address.is_empty() {
+                    return Err(anyhow!("Upstream proxy enabled but address is empty"));
+                }
+                if self.upstream.port.is_none() || self.upstream.port == Some(0) {
+                    return Err(anyhow!("Upstream proxy enabled but port is missing or 0"));
+                }
+            } else {
+                return Err(anyhow!("Upstream proxy enabled but protocol is not set"));
+            }
+        }
+
+        for network in &self.upstream.exclude_networks {
+            if network != "*" && !network.contains('/') {
+                network.parse::<std::net::IpAddr>()
+                    .map_err(|_| anyhow!("Invalid IP address in exclude_networks: {}", network))?;
+            }
         }
 
         Ok(())

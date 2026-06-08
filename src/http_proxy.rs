@@ -3,7 +3,6 @@ use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
 use tracing::{debug, trace, warn};
 
 use crate::config::Config;
@@ -78,11 +77,16 @@ use crate::auth::Authenticator;
 pub struct HttpProxyHandler {
     config: Arc<Config>,
     authenticator: Option<Arc<dyn Authenticator>>,
+    resolver: Arc<trust_dns_resolver::TokioAsyncResolver>,
 }
 
 impl HttpProxyHandler {
-    pub fn new(config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Self {
-        Self { config, authenticator }
+    pub fn new(
+        config: Arc<Config>,
+        authenticator: Option<Arc<dyn Authenticator>>,
+        resolver: Arc<trust_dns_resolver::TokioAsyncResolver>,
+    ) -> Self {
+        Self { config, authenticator, resolver }
     }
 
     pub async fn handle_request<T>(&self, stream: &mut T) -> Result<HttpRequest>
@@ -204,8 +208,14 @@ impl HttpProxyHandler {
     {
         debug!("Establishing CONNECT tunnel to {}:{}", target_host, target_port);
         
-        let mut target_stream = TcpStream::connect((target_host, target_port)).await
-            .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
+        let mut target_stream = crate::upstream::connect_to_target(
+            &self.config,
+            target_host,
+            target_port,
+            false, // is_socks5_request
+            Some(&self.resolver),
+        ).await
+        .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
         
         let response = "HTTP/1.1 200 Connection Established\r\n\r\n";
         client.write_all(response.as_bytes()).await?;
@@ -225,8 +235,14 @@ impl HttpProxyHandler {
         
         debug!("Proxying {} request to {}:{}", request.method, target_host, target_port);
         
-        let mut target_stream = TcpStream::connect((target_host.as_str(), target_port)).await
-            .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
+        let mut target_stream = crate::upstream::connect_to_target(
+            &self.config,
+            &target_host,
+            target_port,
+            false, // is_socks5_request
+            Some(&self.resolver),
+        ).await
+        .map_err(|e| anyhow!("Failed to connect to target {}:{}: {}", target_host, target_port, e))?;
         
         let mut request_data = format!("{} {} {}\r\n", request.method, request.uri, request.version);
         

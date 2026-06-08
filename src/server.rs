@@ -67,18 +67,19 @@ impl ProxyServer {
         let config2 = Arc::clone(&self.config);
         let semaphore1 = Arc::clone(&self.connection_semaphore);
         let semaphore2 = Arc::clone(&self.connection_semaphore);
-        let resolver = Arc::clone(&self.resolver);
+        let resolver_socks5 = Arc::clone(&self.resolver);
+        let resolver_http = Arc::clone(&self.resolver);
         let authenticator1 = self.authenticator.clone();
         let authenticator2 = self.authenticator.clone();
         
         // SOCKS5 server task
         let socks5_task = tokio::spawn(async move {
-            Self::run_socks5_server(socks5_listener, config1, semaphore1, resolver, authenticator1).await
+            Self::run_socks5_server(socks5_listener, config1, semaphore1, resolver_socks5, authenticator1).await
         });
         
         // HTTP server task
         let http_task = tokio::spawn(async move {
-            Self::run_http_server(http_listener, config2, semaphore2, authenticator2).await
+            Self::run_http_server(http_listener, config2, semaphore2, authenticator2, resolver_http).await
         });
         
         tokio::select! {
@@ -151,6 +152,7 @@ impl ProxyServer {
         config: Arc<Config>,
         semaphore: Arc<Semaphore>,
         authenticator: Option<Arc<dyn Authenticator>>,
+        resolver: Arc<TokioAsyncResolver>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
@@ -168,6 +170,7 @@ impl ProxyServer {
 
                     let config = Arc::clone(&config);
                     let authenticator = authenticator.clone();
+                    let resolver = Arc::clone(&resolver);
                     
                     tokio::spawn(async move {
                         // Hold permit for duration of connection
@@ -177,7 +180,7 @@ impl ProxyServer {
                         
                         let result = timeout(
                             timeout_duration,
-                            Self::handle_http_connection(stream, config, authenticator)
+                            Self::handle_http_connection(stream, config, authenticator, resolver)
                         ).await;
                         
                         match result {
@@ -212,7 +215,7 @@ impl ProxyServer {
         
         match request.command {
             Command::Connect => {
-                Self::handle_socks5_connect(stream, request, handler, resolver).await
+                Self::handle_socks5_connect(stream, request, handler, resolver, config).await
             }
             Command::Bind => {
                 let response = Socks5Response::new_error(0x07); // Command not supported
@@ -231,25 +234,28 @@ impl ProxyServer {
         mut client_stream: TcpStream,
         request: Socks5Request,
         handler: Socks5Handler,
-        resolver: Arc<TokioAsyncResolver>
+        resolver: Arc<TokioAsyncResolver>,
+        config: Arc<Config>,
     ) -> Result<()> {
-        let target_addr = match request.address.resolve(&resolver, request.port).await {
-            Ok(addr) => addr,
-            Err(e) => {
-                warn!("Failed to resolve target address: {}", e);
-                let response = Socks5Response::new_error(0x04); // Host unreachable
-                handler.send_response(&mut client_stream, &response).await?;
-                return Err(e);
-            }
+        let target_host = match &request.address {
+            crate::socks5::Address::IPv4(ip) => ip.to_string(),
+            crate::socks5::Address::IPv6(ip) => ip.to_string(),
+            crate::socks5::Address::DomainName(domain) => domain.clone(),
         };
         
-        debug!("Connecting to target: {}", target_addr);
+        debug!("Connecting to target: {}:{}", target_host, request.port);
         
-        let target_stream = match TcpStream::connect(target_addr).await {
+        let target_stream = match crate::upstream::connect_to_target(
+            &config,
+            &target_host,
+            request.port,
+            true, // is_socks5_request
+            Some(&resolver),
+        ).await {
             Ok(stream) => stream,
             Err(e) => {
-                warn!("Failed to connect to target {}: {}", target_addr, e);
-                let response = Socks5Response::new_error(0x05); // Connection refused
+                warn!("Failed to connect to target {}:{}: {}", target_host, request.port, e);
+                let response = Socks5Response::new_error(0x04); // Host unreachable
                 handler.send_response(&mut client_stream, &response).await?;
                 return Err(anyhow!("Connection to target failed: {}", e));
             }
@@ -259,13 +265,18 @@ impl ProxyServer {
         let response = Socks5Response::new_success(local_addr);
         handler.send_response(&mut client_stream, &response).await?;
         
-        debug!("SOCKS5 tunnel established to {}", target_addr);
+        debug!("SOCKS5 tunnel established to {}:{}", target_host, request.port);
         
         Self::relay_data(client_stream, target_stream).await
     }
     
-    async fn handle_http_connection(stream: TcpStream, config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Result<()> {
-        let handler = HttpProxyHandler::new(config, authenticator);
+    async fn handle_http_connection(
+        stream: TcpStream,
+        config: Arc<Config>,
+        authenticator: Option<Arc<dyn Authenticator>>,
+        resolver: Arc<TokioAsyncResolver>,
+    ) -> Result<()> {
+        let handler = HttpProxyHandler::new(config, authenticator, resolver);
         
         let mut buf_stream = BufReader::new(stream);
         

@@ -97,3 +97,36 @@ security:
   rate_limit:
     requests_per_minute: 1000
     burst_size: 100
+
+# Upstream Proxy Settings
+# Route outgoing traffic through upstream HTTP or SOCKS5 proxies
+upstream:
+  # Enable upstream proxying (true/false)
+  enabled: false
+
+  # Upstream protocol: 'socks5' or 'http'
+  protocol: socks5
+
+  # Address of the upstream proxy server
+  address: "127.0.0.1"
+
+  # Port of the upstream proxy server
+  port: 1080
+
+  # Upstream proxy credentials (optional)
+  # username: "proxy_user"
+  # password: "proxy_password"
+
+  # Networks to exclude from upstream proxying (CIDR blocks or IPs)
+  exclude_networks:
+    - "127.0.0.1/8"
+    - "10.0.0.0/8"
+
+  # Domains to exclude from upstream proxying (exact or subdomain suffix)
+  exclude_domains:
+    - "localhost"
+    - "local.lan"
+
+  # Respect standard environment variables: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY (true/false)
+  # Environment variables will override configuration settings if present.
+  prefer_env: true
