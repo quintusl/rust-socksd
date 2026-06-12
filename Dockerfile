@@ -73,4 +73,4 @@ ENV RUST_SOCKSD_HTTP_PORT="8080"
 ENV RUST_SOCKSD_LOG_LEVEL="info"
 
 # Default command to run the application
-CMD ["rust-socksd"]
+ENTRYPOINT ["/usr/local/bin/rust-socksd"]
