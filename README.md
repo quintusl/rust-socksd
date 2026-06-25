@@ -239,7 +239,6 @@ The environment variables checked are:
 - `NO_PROXY` or `no_proxy` (comma/space-separated list of bypass targets)
 
 You can bypass the upstream proxy for specific IP ranges or domain suffixes by using `exclude_networks`, `exclude_domains`, or the standard `NO_PROXY` environment variable. A wildcard `*` in `NO_PROXY` will bypass the upstream proxy for all requests.
-```
 
 ## Usage
 
