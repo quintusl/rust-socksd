@@ -141,3 +141,26 @@ upstream:
   # Respect standard environment variables: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY (true/false)
   # Environment variables will override configuration settings if present.
   prefer_env: true
+
+# Admin API Settings
+# Enable administrative port for metrics, health check, and dynamic config reload
+admin:
+  # Enable the admin API listener (true/false)
+  enabled: false
+
+  # IP address to bind the admin listener to
+  bind_address: "127.0.0.1"
+
+  # Port for the admin API
+  port: 8081
+
+  # Static pre-shared token for API authentication (optional)
+  # token: "my-secure-static-bypass-token"
+
+  # List of usernames allowed to log in and get dynamic tokens
+  # admin_users:
+  #   - "admin"
+
+  # Dynamic token lifespan in seconds (default: 3600)
+  # token_ttl: 3600
+

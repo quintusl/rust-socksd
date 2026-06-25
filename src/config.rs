@@ -15,7 +15,50 @@ pub struct Config {
     pub security: SecurityConfig,
     #[serde(default)]
     pub upstream: UpstreamConfig,
+    #[serde(default)]
+    pub admin: AdminConfig,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_admin_bind_address")]
+    pub bind_address: String,
+    #[serde(default = "default_admin_port")]
+    pub port: u16,
+    pub token: Option<String>,
+    #[serde(default)]
+    pub admin_users: Vec<String>,
+    #[serde(default = "default_token_ttl")]
+    pub token_ttl: u64,
+}
+
+fn default_admin_bind_address() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_admin_port() -> u16 {
+    8081
+}
+
+fn default_token_ttl() -> u64 {
+    3600
+}
+
+impl Default for AdminConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind_address: "127.0.0.1".to_string(),
+            port: 8081,
+            token: None,
+            admin_users: vec![],
+            token_ttl: 3600,
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UpstreamProtocol {
@@ -173,6 +216,7 @@ impl Default for Config {
                 rate_limit: None,
             },
             upstream: UpstreamConfig::default(),
+            admin: AdminConfig::default(),
         }
     }
 }
@@ -310,6 +354,17 @@ impl Config {
                     .map_err(|_| anyhow!("Invalid IP address in exclude_networks: {}", network))?;
             }
         }
+        
+        if self.admin.enabled {
+            if self.admin.port == 0 {
+                return Err(anyhow!("Invalid admin port: {}", self.admin.port));
+            }
+            if self.admin.port == self.server.socks5_port || self.admin.port == self.server.http_port {
+                return Err(anyhow!("Admin port cannot conflict with SOCKS5 or HTTP ports"));
+            }
+            self.admin.bind_address.parse::<std::net::IpAddr>()
+                .map_err(|_| anyhow!("Invalid admin bind address: {}", self.admin.bind_address))?;
+        }
 
         Ok(())
     }
@@ -322,5 +377,10 @@ impl Config {
     pub fn http_bind_addr(&self) -> Result<SocketAddr> {
         let addr = format!("{}:{}", self.server.bind_address, self.server.http_port);
         addr.parse().map_err(|e| anyhow!("Failed to parse HTTP bind address: {}", e))
+    }
+
+    pub fn admin_bind_addr(&self) -> Result<SocketAddr> {
+        let addr = format!("{}:{}", self.admin.bind_address, self.admin.port);
+        addr.parse().map_err(|e| anyhow!("Failed to parse Admin bind address: {}", e))
     }
 }

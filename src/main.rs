@@ -73,6 +73,18 @@ async fn main() -> Result<()> {
                 .value_name("LEVEL")
                 .help("Log level: trace, debug, info, warn, error (can also be set via RUST_SOCKSD_LOG_LEVEL)"),
         )
+        .arg(
+            Arg::new("admin-port")
+                .long("admin-port")
+                .value_name("PORT")
+                .help("Admin API port (can also be set via RUST_SOCKSD_ADMIN_PORT)"),
+        )
+        .arg(
+            Arg::new("admin-enabled")
+                .long("admin-enabled")
+                .help("Enable Admin API server (can also be set via RUST_SOCKSD_ADMIN_ENABLED=true)")
+                .action(clap::ArgAction::SetTrue),
+        )
         .subcommand(
             Command::new("validate")
                 .about("Validate configuration files")
@@ -241,6 +253,24 @@ async fn main() -> Result<()> {
         config.logging.level = log_level;
     }
 
+    if let Some(admin_port) = matches.get_one::<String>("admin-port") {
+        if let Ok(port) = admin_port.parse::<u16>() {
+            config.admin.port = port;
+        }
+    } else if let Ok(admin_port) = std::env::var("RUST_SOCKSD_ADMIN_PORT") {
+        if let Ok(port) = admin_port.parse::<u16>() {
+            config.admin.port = port;
+        }
+    }
+
+    if matches.get_flag("admin-enabled") {
+        config.admin.enabled = true;
+    } else if let Ok(admin_enabled) = std::env::var("RUST_SOCKSD_ADMIN_ENABLED") {
+        if let Ok(enabled) = admin_enabled.parse::<bool>() {
+            config.admin.enabled = enabled;
+        }
+    }
+
     let _guard = setup_logging(&config, &matches);
 
     if std::path::Path::new(config_path).exists() {
@@ -271,7 +301,7 @@ use std::sync::Arc;
         ResolverOpts::default(),
     ));
 
-    let server = ProxyServer::create(config, resolver).await?;
+    let server = ProxyServer::create(config, resolver, config_path.to_string()).await?;
 
     if let Err(e) = server.start().await {
         error!("Server error: {}", e);

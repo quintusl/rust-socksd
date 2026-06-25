@@ -632,6 +632,36 @@ sudo journalctl -u rust-socksd
 sudo tail -f /var/log/rust-socksd/rust-socksd.log
 ```
 
+## Administrative API
+
+`rust-socksd` includes a dedicated, secure HTTP administrative port for liveness probing, Prometheus metrics collection, config schema validation, and runtime hot reloads.
+
+### Configuration
+
+Add the `admin` block in your config:
+```yaml
+admin:
+  enabled: true
+  bind_address: "127.0.0.1"
+  port: 8081
+  token: "my-secure-static-bypass-token" # optional pre-shared bearer token
+  admin_users: ["admin"]                 # users authorized to log in for dynamic tokens
+  token_ttl: 3600                        # TTL for dynamic tokens
+```
+
+*You can also enable/configure the API using CLI flags `--admin-enabled` and `--admin-port <PORT>`, or environment variables `RUST_SOCKSD_ADMIN_ENABLED=true` and `RUST_SOCKSD_ADMIN_PORT=8081`.*
+
+### Main Endpoints
+
+- **`GET /health`**: Public endpoint returning `{ "status": "ok" }`.
+- **`POST /login`**: Exchange Basic Auth credentials (checked against active authenticators) for a transient admin token.
+- **`GET /metrics`**: Exports prometheus-compatible connection metrics, byte transfer counts, and auth failures.
+- **`GET /config`**: Read the running configuration (sensitive passwords automatically masked).
+- **`POST /config/validate`**: Validate a potential configuration body.
+- **`POST /config/reload`**: Read configuration file on disk and hot reload (recreating upstreams, ACL rules, and authentication backends seamlessly). Note: Port changes require a full process restart.
+
+For details, payload formats, and curl command examples, see the [Admin API Reference Guide](file:///Users/quintus/.gemini/antigravity-cli/brain/4eb6d57b-32e4-420e-9a81-21613a19e2b5/admin_api_reference.md).
+
 ## License
 
 This project is licensed under either of

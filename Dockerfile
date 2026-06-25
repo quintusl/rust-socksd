@@ -52,10 +52,10 @@ COPY --from=builder /app/target/release/rust-socksd /usr/local/bin/rust-socksd
 # Ensure the binary is executable
 RUN chmod +x /usr/local/bin/rust-socksd
 
-# Expose the default SOCKS5 port
+# Expose the default SOCKS5, HTTP, and Admin ports
 EXPOSE 1080
-# Consider exposing the HTTP port if it's commonly used and has a fixed default
-# EXPOSE 8080
+EXPOSE 8080
+EXPOSE 8081
 
 # Switch to the non-root user
 USER appuser
@@ -67,8 +67,12 @@ USER appuser
 ENV RUST_SOCKSD_BIND_ADDRESS="0.0.0.0"
 # Default SOCKS5 port
 ENV RUST_SOCKSD_SOCKS5_PORT="1080"
-# Default HTTP port (adjust if needed)
+# Default HTTP port
 ENV RUST_SOCKSD_HTTP_PORT="8080"
+# Default Admin port
+ENV RUST_SOCKSD_ADMIN_PORT="8081"
+# Admin server enabled status
+ENV RUST_SOCKSD_ADMIN_ENABLED="false"
 # Log level
 ENV RUST_SOCKSD_LOG_LEVEL="info"
 

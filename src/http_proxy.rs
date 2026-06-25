@@ -71,13 +71,13 @@ impl HttpRequest {
 }
 
 use crate::auth::Authenticator;
-
-// ...
+use crate::metrics::ServerMetrics;
 
 pub struct HttpProxyHandler {
     config: Arc<Config>,
     authenticator: Option<Arc<dyn Authenticator>>,
     resolver: Arc<trust_dns_resolver::TokioAsyncResolver>,
+    metrics: Option<Arc<ServerMetrics>>,
 }
 
 impl HttpProxyHandler {
@@ -85,8 +85,9 @@ impl HttpProxyHandler {
         config: Arc<Config>,
         authenticator: Option<Arc<dyn Authenticator>>,
         resolver: Arc<trust_dns_resolver::TokioAsyncResolver>,
+        metrics: Option<Arc<ServerMetrics>>,
     ) -> Self {
-        Self { config, authenticator, resolver }
+        Self { config, authenticator, resolver, metrics }
     }
 
     pub async fn handle_request<T>(&self, stream: &mut T) -> Result<HttpRequest>
@@ -191,9 +192,19 @@ impl HttpProxyHandler {
 
         if let Some(auth) = &self.authenticator {
             match auth.authenticate(username, password).await {
-                Ok(valid) => valid,
+                Ok(valid) => {
+                    if !valid {
+                        if let Some(metrics) = &self.metrics {
+                            metrics.auth_failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                    valid
+                }
                 Err(e) => {
                     warn!("Authentication error for user '{}': {}", username, e);
+                    if let Some(metrics) = &self.metrics {
+                        metrics.auth_failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
                     false
                 }
             }
@@ -292,6 +303,10 @@ impl HttpProxyHandler {
         match tokio::io::copy_bidirectional(client, target).await {
             Ok((bytes1, bytes2)) => {
                 debug!("Data relay completed: {} bytes client->target, {} bytes target->client", bytes1, bytes2);
+                if let Some(metrics) = &self.metrics {
+                    metrics.bytes_tx.fetch_add(bytes1, std::sync::atomic::Ordering::Relaxed);
+                    metrics.bytes_rx.fetch_add(bytes2, std::sync::atomic::Ordering::Relaxed);
+                }
                 Ok(())
             }
             Err(e) => {

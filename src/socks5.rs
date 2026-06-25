@@ -123,17 +123,21 @@ impl Socks5Response {
 }
 
 use crate::auth::Authenticator;
-
-// ...
+use crate::metrics::ServerMetrics;
 
 pub struct Socks5Handler {
     _config: Arc<Config>,
     authenticator: Option<Arc<dyn Authenticator>>,
+    metrics: Option<Arc<ServerMetrics>>,
 }
 
 impl Socks5Handler {
-    pub fn new(config: Arc<Config>, authenticator: Option<Arc<dyn Authenticator>>) -> Self {
-        Self { _config: config, authenticator }
+    pub fn new(
+        config: Arc<Config>,
+        authenticator: Option<Arc<dyn Authenticator>>,
+        metrics: Option<Arc<ServerMetrics>>,
+    ) -> Self {
+        Self { _config: config, authenticator, metrics }
     }
     pub async fn handle_handshake<T>(&self, stream: &mut T, auth_required: bool) -> Result<bool>
     where
@@ -223,6 +227,9 @@ impl Socks5Handler {
         if auth_success {
             Ok(true)
         } else {
+            if let Some(metrics) = &self.metrics {
+                metrics.auth_failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
             Err(anyhow!("Authentication failed"))
         }
     }
