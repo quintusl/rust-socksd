@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use base64::{Engine as _, engine::general_purpose};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::{debug, trace, warn};
 
 use crate::config::Config;
@@ -95,49 +95,54 @@ impl HttpProxyHandler {
         T: AsyncBufRead + AsyncWrite + Unpin,
     {
         let mut line = String::new();
-        
-        // Enforce max request size roughly by limiting bytes read
+
+        // Bound total bytes read across the request line + headers. `take` caps
+        // the reader itself, so an unterminated line cannot exhaust memory before
+        // the size check runs.
         let max_size = self.config.security.max_request_size;
-        let mut total_bytes_read = 0;
+        let mut limited = stream.take(max_size as u64);
 
         // Read request line
-        let bytes_read = stream.read_line(&mut line).await?;
-        total_bytes_read += bytes_read;
-        if total_bytes_read > max_size {
-             return Err(anyhow!("Request size exceeds limit"));
+        let bytes_read = limited.read_line(&mut line).await?;
+        if bytes_read == 0 {
+            return Err(anyhow!("Empty HTTP request line"));
         }
-        
+        if limited.limit() == 0 {
+            return Err(anyhow!("Request size exceeds limit"));
+        }
+
         if line.is_empty() {
             return Err(anyhow!("Empty HTTP request line"));
         }
-        
+
         let request_line = line.trim();
         let parts: Vec<&str> = request_line.split_whitespace().collect();
-        
+
         if parts.len() != 3 {
             return Err(anyhow!("Invalid HTTP request line format"));
         }
-        
+
         let method = parts[0].to_string();
         let uri = parts[1].to_string();
         let version = parts[2].to_string();
-        
+
         trace!("HTTP request: {} {} {}", method, uri, version);
-        
+
         let mut headers = HashMap::new();
         loop {
             line.clear();
-            let bytes_read = stream.read_line(&mut line).await?;
-            total_bytes_read += bytes_read;
-            
-            if total_bytes_read > max_size {
-                 return Err(anyhow!("Request size exceeds limit"));
+            let bytes_read = limited.read_line(&mut line).await?;
+
+            // If the cap was reached, the line may be truncated; refuse rather
+            // than act on a partial header.
+            if limited.limit() == 0 {
+                return Err(anyhow!("Request size exceeds limit"));
             }
 
             if bytes_read == 0 {
                 break;
             }
-            
+
             let header_line = line.trim();
             if header_line.is_empty() {
                 break;
@@ -180,7 +185,10 @@ impl HttpProxyHandler {
             Err(_) => return false,
         };
 
-        let credentials = String::from_utf8_lossy(&decoded);
+        let credentials = match String::from_utf8(decoded) {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
         let parts: Vec<&str> = credentials.splitn(2, ':').collect();
 
         if parts.len() != 2 {

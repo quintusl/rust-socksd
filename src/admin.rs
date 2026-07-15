@@ -14,6 +14,11 @@ use tracing::{info, warn, error, debug};
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
 use base64::{Engine as _, engine::general_purpose};
+use subtle::ConstantTimeEq;
+
+/// Hard cap on the admin request headers and body, independent of any
+/// client-supplied Content-Length, to prevent unauthenticated memory exhaustion.
+const MAX_ADMIN_REQUEST_SIZE: usize = 1024 * 1024;
 
 pub struct TokenInfo {
     pub username: String,
@@ -113,9 +118,11 @@ impl AdminServer {
     }
 
     async fn read_request(stream: &mut TcpStream) -> Result<AdminRequest> {
-        let mut reader = BufReader::new(stream);
+        // Bound the total bytes read for the request line + headers so a client
+        // cannot exhaust memory with an unterminated line.
+        let mut reader = BufReader::new(stream).take(MAX_ADMIN_REQUEST_SIZE as u64);
         let mut line = String::new();
-        
+
         // Read request line
         reader.read_line(&mut line).await?;
         let parts: Vec<&str> = line.trim().split_whitespace().collect();
@@ -124,12 +131,16 @@ impl AdminServer {
         }
         let method = parts[0].to_uppercase();
         let path = parts[1].to_string();
-        
+
         // Read headers
         let mut headers = HashMap::new();
         loop {
             line.clear();
-            reader.read_line(&mut line).await?;
+            let n = reader.read_line(&mut line).await?;
+            if n == 0 {
+                // EOF or header section exceeded the size cap.
+                break;
+            }
             if line.trim().is_empty() {
                 break;
             }
@@ -139,16 +150,22 @@ impl AdminServer {
                 headers.insert(name, value);
             }
         }
-        
-        // Read body if Content-Length is present
+
+        // Read body if Content-Length is present, refusing oversized declarations
+        // rather than pre-allocating attacker-controlled amounts of memory.
         let mut body = Vec::new();
         if let Some(cl_str) = headers.get("content-length") {
             if let Ok(cl) = cl_str.parse::<usize>() {
+                if cl > MAX_ADMIN_REQUEST_SIZE {
+                    return Err(anyhow!("Request body exceeds limit ({} bytes)", cl));
+                }
+                // Reset the cap for the body read.
+                reader.set_limit(cl as u64);
                 body.resize(cl, 0);
                 reader.read_exact(&mut body).await?;
             }
         }
-        
+
         Ok(AdminRequest { method, path, headers, body })
     }
 
@@ -172,7 +189,6 @@ impl AdminServer {
              Content-Type: {}\r\n\
              Content-Length: {}\r\n\
              Connection: close\r\n\
-             Access-Control-Allow-Origin: *\r\n\
              {}\
              \r\n\
              {}",
@@ -199,13 +215,14 @@ impl AdminServer {
         
         let token = &auth_header[7..];
         
-        // Check static token
+        // Check static token using a constant-time comparison to avoid leaking
+        // the token via response timing.
         if let Some(static_token) = &config.admin.token {
-            if token == static_token {
+            if token.as_bytes().ct_eq(static_token.as_bytes()).into() {
                 return true;
             }
         }
-        
+
         // Check dynamic token
         token_store.validate_token(token).is_some()
     }
@@ -354,10 +371,10 @@ impl AdminServer {
                     Ok(c) => {
                         match c.validate() {
                             Ok(_) => Self::send_response(stream, 200, "OK", "application/json", r#"{"valid":true}"#, None).await?,
-                            Err(e) => Self::send_response(stream, 400, "Bad Request", "application/json", &format!(r#"{{"valid":false,"error":"{}"}}"#, e), None).await?,
+                            Err(e) => Self::send_response(stream, 400, "Bad Request", "application/json", &json_error(false, &e.to_string()), None).await?,
                         }
                     }
-                    Err(e) => Self::send_response(stream, 400, "Bad Request", "application/json", &format!(r#"{{"valid":false,"error":"YAML parsing failed: {}"}}"#, e), None).await?,
+                    Err(e) => Self::send_response(stream, 400, "Bad Request", "application/json", &json_error(false, &format!("YAML parsing failed: {}", e)), None).await?,
                 }
             }
             ("POST", "/config/reload") => {
@@ -387,13 +404,13 @@ impl AdminServer {
                             }
                             Err(e) => {
                                 warn!("Failed to recreate authenticator during reload: {}", e);
-                                Self::send_response(stream, 500, "Internal Server Error", "application/json", &format!(r#"{{"status":"failed","error":"Failed to recreate authenticator: {}"}}"#, e), None).await?;
+                                Self::send_response(stream, 500, "Internal Server Error", "application/json", &json_status("failed", Some(&format!("Failed to recreate authenticator: {}", e))), None).await?;
                             }
                         }
                     }
                     Err(e) => {
                         warn!("Failed to load configuration file for reload: {}", e);
-                        Self::send_response(stream, 400, "Bad Request", "application/json", &format!(r#"{{"status":"failed","error":"Failed to load/validate config: {}"}}"#, e), None).await?;
+                        Self::send_response(stream, 400, "Bad Request", "application/json", &json_status("failed", Some(&format!("Failed to load/validate config: {}", e))), None).await?;
                     }
                 }
             }
@@ -403,6 +420,19 @@ impl AdminServer {
         }
 
         Ok(())
+    }
+}
+
+// Build a `{"valid":<bool>,"error":<msg>}` body with the error safely escaped.
+fn json_error(valid: bool, error: &str) -> String {
+    serde_json::json!({ "valid": valid, "error": error }).to_string()
+}
+
+// Build a `{"status":<status>[,"error":<msg>]}` body with fields safely escaped.
+fn json_status(status: &str, error: Option<&str>) -> String {
+    match error {
+        Some(e) => serde_json::json!({ "status": status, "error": e }).to_string(),
+        None => serde_json::json!({ "status": status }).to_string(),
     }
 }
 

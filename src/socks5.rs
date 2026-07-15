@@ -209,13 +209,15 @@ impl Socks5Handler {
         }
         
         stream.read_exact(&mut buf[0..ulen as usize]).await?;
-        let username = String::from_utf8_lossy(&buf[0..ulen as usize]).to_string();
-        
+        let username = String::from_utf8(buf[0..ulen as usize].to_vec())
+            .map_err(|_| anyhow!("Invalid UTF-8 in username"))?;
+
         stream.read_exact(&mut buf[0..1]).await?;
         let plen = buf[0];
-        
+
         stream.read_exact(&mut buf[0..plen as usize]).await?;
-        let password = String::from_utf8_lossy(&buf[0..plen as usize]).to_string();
+        let password = String::from_utf8(buf[0..plen as usize].to_vec())
+            .map_err(|_| anyhow!("Invalid UTF-8 in password"))?;
         
         debug!("Auth attempt - username: {}", username);
         

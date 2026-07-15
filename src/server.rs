@@ -6,6 +6,7 @@ use crate::auth::{Authenticator, simple::SimpleAuthenticator, ldap::LdapAuthenti
 use crate::auth::pam::PamAuthenticator;
 use crate::metrics::ServerMetrics;
 use crate::admin::AdminServer;
+use crate::ratelimit::RateLimiter;
 
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
@@ -26,6 +27,7 @@ pub struct ProxyServer {
     connection_semaphore: Arc<Semaphore>,
     resolver: Arc<TokioAsyncResolver>,
     metrics: Arc<ServerMetrics>,
+    rate_limiter: Option<Arc<RateLimiter>>,
     config_path: String,
 }
 
@@ -54,6 +56,12 @@ impl ProxyServer {
              None
         };
 
+        let rate_limiter = config
+            .security
+            .rate_limit
+            .as_ref()
+            .map(|rl| Arc::new(RateLimiter::new(rl)));
+
         let state = Arc::new(RwLock::new(ServerState {
             config: Arc::new(config),
             authenticator,
@@ -64,6 +72,7 @@ impl ProxyServer {
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
             resolver,
             metrics: Arc::new(ServerMetrics::new()),
+            rate_limiter,
             config_path,
         })
     }
@@ -100,15 +109,17 @@ impl ProxyServer {
         let resolver_http = Arc::clone(&self.resolver);
         let metrics1 = Arc::clone(&self.metrics);
         let metrics2 = Arc::clone(&self.metrics);
-        
+        let rate_limiter1 = self.rate_limiter.clone();
+        let rate_limiter2 = self.rate_limiter.clone();
+
         // SOCKS5 server task
         let socks5_task = tokio::spawn(async move {
-            Self::run_socks5_server(socks5_listener, state1, semaphore1, resolver_socks5, metrics1).await
+            Self::run_socks5_server(socks5_listener, state1, semaphore1, resolver_socks5, metrics1, rate_limiter1).await
         });
-        
+
         // HTTP server task
         let http_task = tokio::spawn(async move {
-            Self::run_http_server(http_listener, state2, semaphore2, resolver_http, metrics2).await
+            Self::run_http_server(http_listener, state2, semaphore2, resolver_http, metrics2, rate_limiter2).await
         });
         
         // Admin server task (if enabled)
@@ -157,18 +168,50 @@ impl ProxyServer {
         Ok(())
     }
     
+    /// Enforce ingress access control and rate limiting for a newly accepted
+    /// connection. Returns false if the connection should be dropped.
+    async fn admit_client(
+        state: &Arc<RwLock<ServerState>>,
+        rate_limiter: Option<&RateLimiter>,
+        addr: std::net::SocketAddr,
+    ) -> bool {
+        let config = {
+            let guard = state.read().await;
+            guard.config.clone()
+        };
+
+        if !crate::upstream::check_client_allowed(&config, addr.ip()) {
+            warn!("Rejected connection from {}: source not in allowed_networks", addr.ip());
+            return false;
+        }
+
+        if let Some(limiter) = rate_limiter {
+            if !limiter.check(addr.ip()) {
+                warn!("Rejected connection from {}: rate limit exceeded", addr.ip());
+                return false;
+            }
+        }
+
+        true
+    }
+
     async fn run_socks5_server(
         listener: TcpListener,
         state: Arc<RwLock<ServerState>>,
         semaphore: Arc<Semaphore>,
         resolver: Arc<TokioAsyncResolver>,
         metrics: Arc<ServerMetrics>,
+        rate_limiter: Option<Arc<RateLimiter>>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     debug!("New SOCKS5 connection from {}", addr);
-                    
+
+                    if !Self::admit_client(&state, rate_limiter.as_deref(), addr).await {
+                        continue;
+                    }
+
                     // Acquire permit before spawning to provide backpressure
                     let permit = match semaphore.clone().acquire_owned().await {
                         Ok(p) => p,
@@ -224,12 +267,17 @@ impl ProxyServer {
         semaphore: Arc<Semaphore>,
         resolver: Arc<TokioAsyncResolver>,
         metrics: Arc<ServerMetrics>,
+        rate_limiter: Option<Arc<RateLimiter>>,
     ) -> Result<()> {
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
                     debug!("New HTTP connection from {}", addr);
-                    
+
+                    if !Self::admit_client(&state, rate_limiter.as_deref(), addr).await {
+                        continue;
+                    }
+
                     // Acquire permit before spawning to provide backpressure
                     let permit = match semaphore.clone().acquire_owned().await {
                         Ok(p) => p,

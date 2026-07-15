@@ -191,6 +191,20 @@ security:
     burst_size: 100
 ```
 
+Enforcement notes:
+
+- **`allowed_networks`** is an *ingress* allowlist matched against the client's
+  source IP. An empty list allows all clients; a non-empty list rejects any
+  source that does not match an entry. Note that `0.0.0.0/0` matches IPv4 only —
+  add `::/0` if you also accept IPv6 clients.
+- **`blocked_domains`** rejects proxy requests whose target host matches an entry
+  exactly or as a subdomain suffix (e.g. `evil.com` also blocks `sub.evil.com`).
+- **`rate_limit`** applies a per-source-IP token bucket to newly accepted
+  connections (`burst_size` immediate, refilling at `requests_per_minute`).
+- Egress rules resolve the target once and connect to the validated IP, so a
+  DNS response cannot pass the check on one address and be connected to on
+  another.
+
 ### Upstream Proxy Configuration
 
 `rust-socksd` can route outgoing client traffic through an upstream SOCKS5 or HTTP proxy server. This is useful for chain-proxying, routing traffic through VPN gateways, or utilizing corporate proxies.
@@ -649,6 +663,11 @@ admin:
 ```
 
 *You can also enable/configure the API using CLI flags `--admin-enabled` and `--admin-port <PORT>`, or environment variables `RUST_SOCKSD_ADMIN_ENABLED=true` and `RUST_SOCKSD_ADMIN_PORT=8081`.*
+
+> **Security:** The admin API speaks plaintext HTTP. Bearer tokens and the
+> Basic-auth credentials sent to `POST /login` are therefore not encrypted in
+> transit. Keep `bind_address` on `127.0.0.1` (the default), or place the API
+> behind a TLS-terminating reverse proxy before exposing it beyond localhost.
 
 ### Main Endpoints
 

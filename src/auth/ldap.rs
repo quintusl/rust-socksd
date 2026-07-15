@@ -42,6 +42,14 @@ impl LdapAuthenticator {
 #[async_trait]
 impl Authenticator for LdapAuthenticator {
     async fn authenticate(&self, username: &str, password: &str) -> Result<bool> {
+        // An empty password with a valid DN triggers an "unauthenticated bind"
+        // (RFC 4513 §5.1.2), which many directory servers report as success.
+        // Reject it outright so it can never be mistaken for valid credentials.
+        if password.is_empty() {
+            debug!("Rejecting empty password for user: {}", username);
+            return Ok(false);
+        }
+
         let (conn, mut ldap) = LdapConnAsync::new(&self.url).await
             .map_err(|e| anyhow!("Failed to connect to LDAP server: {}", e))?;
             

@@ -15,7 +15,7 @@ pub struct UpstreamProxy {
     pub password: Option<String>,
 }
 
-fn match_cidr(ip: IpAddr, cidr: &str) -> bool {
+pub fn match_cidr(ip: IpAddr, cidr: &str) -> bool {
     let parts: Vec<&str> = cidr.split('/').collect();
     if parts.is_empty() {
         return false;
@@ -64,6 +64,29 @@ fn match_cidr(ip: IpAddr, cidr: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// Ingress access control: returns true if a client connecting from `ip` is
+/// permitted. An empty `allowed_networks` list means "allow all"; otherwise the
+/// client IP must match at least one entry.
+pub fn check_client_allowed(config: &Config, ip: IpAddr) -> bool {
+    let allowed = &config.security.allowed_networks;
+    if allowed.is_empty() {
+        return true;
+    }
+    allowed.iter().any(|network| match_cidr(ip, network))
+}
+
+/// Destination policy: returns true if `host` matches a `blocked_domains` entry.
+/// Matches an exact domain or any subdomain suffix (case-insensitive).
+pub fn is_domain_blocked(config: &Config, host: &str) -> bool {
+    let host_lower = host.to_lowercase();
+    config.security.blocked_domains.iter().any(|domain| {
+        let domain_clean = domain.trim_start_matches('.').to_lowercase();
+        !domain_clean.is_empty()
+            && (host_lower == domain_clean
+                || host_lower.ends_with(&format!(".{}", domain_clean)))
+    })
 }
 
 pub fn check_egress_rules(config: &Config, ip: IpAddr) -> bool {
@@ -305,6 +328,11 @@ pub fn resolve_upstream(
     None
 }
 
+async fn connect_stream_ip(ip: IpAddr, port: u16) -> Result<TcpStream> {
+    let addr = std::net::SocketAddr::from((ip, port));
+    Ok(TcpStream::connect(addr).await?)
+}
+
 async fn connect_stream(
     host: &str,
     port: u16,
@@ -490,39 +518,48 @@ pub async fn connect_to_target(
     is_socks5_request: bool,
     resolver: Option<&trust_dns_resolver::TokioAsyncResolver>,
 ) -> Result<TcpStream> {
-    let mut target_ip = None;
-    if let Ok(ip) = target_host.parse::<IpAddr>() {
-        target_ip = Some(ip);
-    } else {
-        let has_egress_rules = !config.security.allowed_egress_networks.is_empty()
-            || !config.security.blocked_egress_networks.is_empty();
-        let no_proxy = get_no_proxy_list();
-        let has_ip_exclusions = config.upstream.exclude_networks.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok())
-            || no_proxy.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok());
-        
-        if has_ip_exclusions || has_egress_rules {
-            if let Some(r) = resolver {
-                if let Ok(lookup) = r.lookup_ip(target_host).await {
-                    target_ip = lookup.iter().next().map(IpAddr::from);
-                }
-            } else if let Ok(mut addrs) = tokio::net::lookup_host(format!("{}:{}", target_host, target_port)).await {
-                target_ip = addrs.next().map(|addr| addr.ip());
-            }
-        }
+    // Destination policy check (applies regardless of upstream routing).
+    if is_domain_blocked(config, target_host) {
+        return Err(anyhow!("Connection to {} is blocked by security policy (blocked_domains)", target_host));
     }
 
     let has_egress_rules = !config.security.allowed_egress_networks.is_empty()
         || !config.security.blocked_egress_networks.is_empty();
 
-    if has_egress_rules {
-        match target_ip {
-            Some(ip) => {
-                if !check_egress_rules(config, ip) {
-                    return Err(anyhow!("Connection to {}:{} (IP: {}) is blocked by security policy", target_host, target_port, ip));
+    // Resolve the target to a concrete set of IPs. We resolve at most once and
+    // reuse the result for both the security check and the actual connection, so
+    // a DNS-rebinding response cannot pass the check with one IP and then be
+    // connected to on another.
+    let mut resolved_ips: Vec<IpAddr> = Vec::new();
+    if let Ok(ip) = target_host.parse::<IpAddr>() {
+        resolved_ips.push(ip);
+    } else {
+        let no_proxy = get_no_proxy_list();
+        let has_ip_exclusions = config.upstream.exclude_networks.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok())
+            || no_proxy.iter().any(|entry| entry.contains('/') || entry.parse::<IpAddr>().is_ok());
+
+        if has_ip_exclusions || has_egress_rules {
+            if let Some(r) = resolver {
+                if let Ok(lookup) = r.lookup_ip(target_host).await {
+                    resolved_ips.extend(lookup.iter().map(IpAddr::from));
                 }
+            } else if let Ok(addrs) = tokio::net::lookup_host(format!("{}:{}", target_host, target_port)).await {
+                resolved_ips.extend(addrs.map(|addr| addr.ip()));
             }
-            None => {
-                return Err(anyhow!("Failed to resolve target host {} to IP address for security check", target_host));
+        }
+    }
+
+    let target_ip = resolved_ips.first().copied();
+
+    if has_egress_rules {
+        if resolved_ips.is_empty() {
+            return Err(anyhow!("Failed to resolve target host {} to IP address for security check", target_host));
+        }
+        // Every resolved address must pass; otherwise an attacker could steer the
+        // subsequent connection to a disallowed address.
+        for ip in &resolved_ips {
+            if !check_egress_rules(config, *ip) {
+                return Err(anyhow!("Connection to {}:{} (IP: {}) is blocked by security policy", target_host, target_port, ip));
             }
         }
     }
@@ -560,7 +597,17 @@ pub async fn connect_to_target(
         }
     } else {
         debug!("Connecting directly to target {}:{}", target_host, target_port);
-        connect_stream(target_host, target_port, resolver).await
+        // When egress rules are active we already validated the resolved IPs;
+        // connect to one of those exact addresses rather than re-resolving, to
+        // avoid a rebinding window between the check and the connect.
+        if has_egress_rules {
+            match target_ip {
+                Some(ip) => connect_stream_ip(ip, target_port).await,
+                None => Err(anyhow!("Failed to resolve target host {} for connection", target_host)),
+            }
+        } else {
+            connect_stream(target_host, target_port, resolver).await
+        }
     }
 }
 
@@ -648,6 +695,40 @@ mod tests {
         assert!(is_excluded("10.0.0.5", ip_no_proxy, &exclude_networks, &exclude_domains, &no_proxy_list));
         assert!(is_excluded("apple.com", None, &exclude_networks, &exclude_domains, &no_proxy_list));
         assert!(is_excluded("sub.apple.com", None, &exclude_networks, &exclude_domains, &no_proxy_list));
+    }
+
+    #[test]
+    fn test_check_client_allowed() {
+        let mut config = Config::default();
+
+        // Default has allowed_networks = ["0.0.0.0/0"] -> allows any IPv4.
+        assert!(check_client_allowed(&config, "8.8.8.8".parse().unwrap()));
+
+        // Empty list means allow-all (including IPv6).
+        config.security.allowed_networks = vec![];
+        assert!(check_client_allowed(&config, "8.8.8.8".parse().unwrap()));
+        assert!(check_client_allowed(&config, "2001:db8::1".parse().unwrap()));
+
+        // Non-empty list is an allowlist.
+        config.security.allowed_networks = vec!["10.0.0.0/8".to_string(), "192.168.1.5".to_string()];
+        assert!(check_client_allowed(&config, "10.1.2.3".parse().unwrap()));
+        assert!(check_client_allowed(&config, "192.168.1.5".parse().unwrap()));
+        assert!(!check_client_allowed(&config, "192.168.1.6".parse().unwrap()));
+        assert!(!check_client_allowed(&config, "8.8.8.8".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_is_domain_blocked() {
+        let mut config = Config::default();
+        assert!(!is_domain_blocked(&config, "example.com"));
+
+        config.security.blocked_domains = vec!["evil.com".to_string(), ".ads.example".to_string()];
+        assert!(is_domain_blocked(&config, "evil.com"));
+        assert!(is_domain_blocked(&config, "EVIL.COM"));
+        assert!(is_domain_blocked(&config, "sub.evil.com"));
+        assert!(is_domain_blocked(&config, "tracker.ads.example"));
+        assert!(!is_domain_blocked(&config, "notevil.com"));
+        assert!(!is_domain_blocked(&config, "evil.com.safe.net"));
     }
 
     #[test]

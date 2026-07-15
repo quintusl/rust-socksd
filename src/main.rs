@@ -212,9 +212,15 @@ async fn main() -> Result<()> {
     let config_path = matches.get_one::<String>("config").unwrap();
 
     let mut config = if std::path::Path::new(config_path).exists() {
+        // Fail closed: a present-but-invalid config must not silently downgrade to
+        // the permissive defaults (auth disabled, allow-all networks).
         match Config::load_from_file(config_path) {
             Ok(config) => config,
-            Err(_) => Config::default()
+            Err(e) => {
+                eprintln!("Failed to load configuration from {}: {}", config_path, e);
+                eprintln!("Refusing to start with default configuration. Fix the config or run --generate-config.");
+                std::process::exit(1);
+            }
         }
     } else {
         Config::default()
@@ -274,18 +280,10 @@ async fn main() -> Result<()> {
     let _guard = setup_logging(&config, &matches);
 
     if std::path::Path::new(config_path).exists() {
-        match Config::load_from_file(config_path) {
-            Ok(_) => {
-                info!("Loaded configuration from {}", config_path);
-            }
-            Err(e) => {
-                error!("Failed to load configuration from {}: {}", config_path, e);
-                error!("Using default configuration. Run with --generate-config to create a template.");
-            }
-        }
+        info!("Loaded configuration from {}", config_path);
     } else {
         info!("Configuration file {} not found, using defaults", config_path);
-    };
+    }
 
 use trust_dns_resolver::{TokioAsyncResolver, config::*};
 use std::sync::Arc;

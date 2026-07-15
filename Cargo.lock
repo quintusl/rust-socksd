@@ -1599,6 +1599,7 @@ dependencies = [
  "serde_yaml",
  "socket2 0.5.10",
  "sqlx",
+ "subtle",
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
