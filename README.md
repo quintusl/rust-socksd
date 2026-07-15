@@ -1,711 +1,91 @@
 # rust-socksd
 
-A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring modern async architecture and comprehensive security features.
+A high-performance SOCKS5 and HTTP proxy server written in Rust, featuring modern async architecture, modular authentication, and comprehensive security features.
+
+---
 
 ## Features
 
-- **Full SOCKS5 Protocol Support**: Complete implementation with username/password authentication
-- **HTTP Proxy**: Support for HTTP/HTTPS with CONNECT method, including Basic Authentication support
-- **Upstream Proxy Routing**: Route outgoing traffic through upstream SOCKS5 or HTTP proxies, with support for Basic Authentication, domain/network bypass rules, and environment variables (`ALL_PROXY`, `HTTP_PROXY`, etc.)
-- **Multi-threaded Architecture**: Built on tokio for high concurrency
-- **YAML Configuration**: Flexible and easy-to-use configuration system
-- **Modular Authentication Backends**: Secure authentication supporting Simple (file-based Argon2/Bcrypt/Scrypt), PAM, LDAP, and Database (MySQL/PostgreSQL) backends
-- **Security Features**: Source network restrictions, domain blocking, egress destination network filtering, max request size control, and rate limiting
-- **Systemd Integration**: Native Linux service support with journald logging
-- **Comprehensive Logging**: Configurable logging to console, file, and journald with multiple levels
-- **Package Support**: Debian packages and Arch AUR available
+* **Dual Protocol Support**: Complete implementation of SOCKS5 (RFC 1928) and HTTP/HTTPS (CONNECT method) proxies running on separate ports.
+* **Authentication**: Seamless username/password verification (Basic Auth for HTTP) using modular backends (Simple file-based, Linux PAM, LDAP, or SQL database).
+* **Upstream Chaining**: Chain outgoing connections through upstream SOCKS5 or HTTP proxies, including bypass rules and environment variable support.
+* **Granular Security Controls**: Source network restrictions (ingress ACLs), destination filters (egress ACLs), domain blocking, rate limiting, and request size controls.
+* **Admin HTTP API**: Dedicated endpoint for real-time metrics, dynamic configuration validation, liveness/health probing, and hot reloads.
+* **Production Hardened**: Native systemd service integration, Debian/Ubuntu packaging support, Arch Linux AUR, and multi-stage secure Docker containers.
+
+---
 
 ## Quick Start
 
-### Installation
-
-#### From Source
+### Build and Run from Source
 
 ```bash
+# Clone the repository
 git clone https://github.com/quintusl/rust-socksd.git
 cd rust-socksd
+
+# Build in release mode
 cargo build --release
-sudo cp target/release/rust-socksd /usr/local/bin/
+
+# Generate a default configuration file
+./target/release/rust-socksd --generate-config config.yml
+
+# Start the proxy daemon
+./target/release/rust-socksd --config config.yml
 ```
 
-#### Debian/Ubuntu
+For package installations, Docker configurations, and platform-specific guides, see the [Quick Start Guide](doc/quickstart.md).
 
-```bash
-sudo dpkg -i rust-socksd_0.1.1-1_amd64.deb
-```
+---
 
-#### Arch Linux
+## Documentation Map
 
-```bash
-yay -S rust-socksd
-```
+Detailed guides are split into topic-specific files located in the `doc/` directory:
 
-#### Docker
+| Document | Description |
+| :--- | :--- |
+| **[Quick Start Guide](doc/quickstart.md)** | Installation steps for Source, Debian, Arch Linux, and Docker; verification checks. |
+| **[Configuration Guide](doc/configuration.md)** | Explanation of settings, logging, security policies, upstream proxies, and environment variables. |
+| **[Authentication Backends](doc/authentication.md)** | Setting up file-based user accounts, Linux PAM, LDAP directory, SQL database, and CLI user controls. |
+| **[CLI & Usage Guide](doc/usage.md)** | Command-line arguments, options, the `validate` and `user` subcommands, and proxy client examples. |
+| **[Docker & Containerization](doc/docker.md)** | Running with Docker and Docker Compose, secure environment settings, and runtime mounts. |
+| **[Deployment & Packaging](doc/deployment.md)** | Setting up systemd services, reading journald logs, and building `.deb` or AUR packages. |
+| **[Admin API Reference](doc/admin_api.md)** | Endpoints for Prometheus metrics, health checking, config inspections, schema validation, and hot reload. |
+| **[Troubleshooting Guide](doc/troubleshooting.md)** | Common errors (ports, permissions, connection, auth) and log inspecting techniques. |
 
-```bash
-# Pull and run the latest Docker image
-docker run -d \
-  --name rust-socksd \
-  -p 1080:1080 \
-  -p 8080:8080 \
-  quintux/rust-socksd:latest
-```
-
-### Running
-
-#### Direct execution
-
-```bash
-rust-socksd --config config.yml
-```
-
-#### As a systemd service
-
-```bash
-sudo systemctl enable rust-socksd
-sudo systemctl start rust-socksd
-```
-
-## Configuration
-
-The server is configured using a YAML file. See `config.yml.example` for a complete example with all options.
-
-Generate a default configuration file:
-
-```bash
-rust-socksd --generate-config config.yml
-```
-
-Edit the configuration file to suit your needs:
-
-```bash
-nano config.yml
-```
-
-### Basic Configuration
-
-```yaml
-server:
-  bind_address: "127.0.0.1"
-  socks5_port: 1080
-  http_port: 8080
-  max_connections: 1000
-  connection_timeout: 300
-
-auth:
-  enabled: false
-  type: simple
-  user_config_file: "config/users.yml"
-
-logging:
-  level: "info"
-  console: true
-```
-
-### Authentication
-rust-socksd supports multiple authentication backends to secure your proxy.
-
-#### Supported Backends
-
-1. **Simple (File-based)**: Uses a local YAML file with secure password hashes (Argon2, Bcrypt, Scrypt).
-2. **PAM**: Integrates with Linux Pluggable Authentication Modules (e.g., system users).
-3. **LDAP**: Authenticates against an LDAP directory (e.g., Active Directory, OpenLDAP).
-4. **Database**: Authenticates against a MySQL or PostgreSQL database.
-
-#### Configuration Examples
-
-##### 1. Simple (File-based)
-
-```yaml
-auth:
-  enabled: true
-  type: simple
-  user_config_file: "config/users.yml"
-```
-
-Manage users via CLI:
-```bash
-rust-socksd user --user-config config/users.yml add myuser
-```
-
-##### 2. PAM
-
-Authenticate using system users (requires running as root or with appropriate permissions):
-
-```yaml
-auth:
-  enabled: true
-  type: pam
-  service: "socksd" # config file in /etc/pam.d/socksd
-```
-
-##### 3. LDAP
-
-```yaml
-auth:
-  enabled: true
-  type: ldap
-  url: "ldap://ldap.example.com:389"
-  base_dn: "ou=users,dc=example,dc=com"
-  # Optional binding for search
-  bind_dn: "cn=admin,dc=example,dc=com"
-  bind_password: "admin_password"
-  user_filter: "(uid={})" # {} is replaced by the username
-```
-
-##### 4. Database (MySQL/PostgreSQL)
-
-Authenticate by fetching a password hash from a database. The hash is verified using the same secure algorithms as the Simple backend.
-
-```yaml
-auth:
-  enabled: true
-  type: database
-  db_type: "mysql" # or "postgres"
-  url: "mysql://socksd:password@localhost/socksd_db"
-  query: "SELECT password_hash FROM users WHERE username = ?"
-  hash_type: "argon2" # argon2, bcrypt, or scrypt
-```
-
-### Security configuration
-
-Configure network restrictions and domain blocking:
-
-```yaml
-security:
-  allowed_networks:
-    - "192.168.1.0/24"
-    - "10.0.0.0/8"
-  blocked_domains:
-    - "malicious-site.com"
-    - "blocked-domain.net"
-  allowed_egress_networks:
-    - "8.8.8.8"
-    - "8.8.4.4"
-  blocked_egress_networks:
-    - "127.0.0.0/8"
-    - "10.0.0.0/8"
-  max_request_size: 1048576  # 1MB max request size limit
-  rate_limit:
-    requests_per_minute: 1000
-    burst_size: 100
-```
-
-Enforcement notes:
-
-- **`allowed_networks`** is an *ingress* allowlist matched against the client's
-  source IP. An empty list allows all clients; a non-empty list rejects any
-  source that does not match an entry. Note that `0.0.0.0/0` matches IPv4 only —
-  add `::/0` if you also accept IPv6 clients.
-- **`blocked_domains`** rejects proxy requests whose target host matches an entry
-  exactly or as a subdomain suffix (e.g. `evil.com` also blocks `sub.evil.com`).
-- **`rate_limit`** applies a per-source-IP token bucket to newly accepted
-  connections (`burst_size` immediate, refilling at `requests_per_minute`).
-- Egress rules resolve the target once and connect to the validated IP, so a
-  DNS response cannot pass the check on one address and be connected to on
-  another.
-
-### Upstream Proxy Configuration
-
-`rust-socksd` can route outgoing client traffic through an upstream SOCKS5 or HTTP proxy server. This is useful for chain-proxying, routing traffic through VPN gateways, or utilizing corporate proxies.
-
-```yaml
-upstream:
-  # Enable upstream proxying (true/false)
-  enabled: true
-
-  # Upstream protocol: 'socks5' or 'http'
-  protocol: socks5
-
-  # Address of the upstream proxy server
-  address: "127.0.0.1"
-
-  # Port of the upstream proxy server
-  port: 1080
-
-  # Upstream proxy credentials (optional basic auth)
-  username: "proxy_user"
-  password: "proxy_password"
-
-  # Networks to exclude from upstream proxying (CIDR blocks or IPs)
-  exclude_networks:
-    - "127.0.0.1/8"
-    - "10.0.0.0/8"
-
-  # Domains to exclude from upstream proxying (exact or subdomain suffix)
-  exclude_domains:
-    - "localhost"
-    - "local.lan"
-
-  # Respect standard environment variables: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY (true/false)
-  # If true, these environment variables will take precedence over options configured above.
-  prefer_env: true
-```
-
-#### Environment Variable Support
-
-When `prefer_env` is set to `true` (default), the proxy server automatically detects and uses standard proxy environment variables. They will override the configuration file.
-
-The environment variables checked are:
-- `ALL_PROXY` or `all_proxy` (highest priority for SOCKS5 or general connections)
-- `HTTPS_PROXY` or `https_proxy` (for secure HTTPS target requests)
-- `HTTP_PROXY` or `http_proxy` (for HTTP target requests)
-- `NO_PROXY` or `no_proxy` (comma/space-separated list of bypass targets)
-
-You can bypass the upstream proxy for specific IP ranges or domain suffixes by using `exclude_networks`, `exclude_domains`, or the standard `NO_PROXY` environment variable. A wildcard `*` in `NO_PROXY` will bypass the upstream proxy for all requests.
-
-## Usage
-
-### SOCKS5 Proxy
-
-Configure your applications to use the SOCKS5 proxy:
-
-- **Host**: Your server IP
-- **Port**: 1080 (default)
-- **Authentication**: Username/password (if enabled)
-
-Example with curl:
-
-```bash
-curl --socks5-hostname localhost:1080 https://httpbin.org/ip
-```
-
-### HTTP Proxy
-
-Configure your applications to use the HTTP proxy:
-
-- **Host**: Your server IP
-- **Port**: 8080 (default)
-
-Example with curl:
-
-```bash
-curl --proxy localhost:8080 https://httpbin.org/ip
-```
-
-## Command Line Options
-
-### Main Command
-
-```bash
-rust-socksd [OPTIONS] [SUBCOMMAND]
-
-OPTIONS:
-    -c, --config <FILE>              Configuration file path [default: config.yml]
-    -g, --generate-config <FILE>     Generate a default configuration file
-    -v, --verbose                    Enable verbose logging (can be used multiple times)
-    -q, --quiet                      Suppress all output except errors
-    -b, --bind <ADDRESS>             Bind address (can also be set via RUST_SOCKSD_BIND_ADDRESS)
-    -p, --http-port <PORT>           HTTP proxy port (can also be set via RUST_SOCKSD_HTTP_PORT)
-    -s, --socks5-port <PORT>         SOCKS5 proxy port (can also be set via RUST_SOCKSD_SOCKS5_PORT)
-    -l, --loglevel <LEVEL>           Log level: trace, debug, info, warn, error (can also be set via RUST_SOCKSD_LOG_LEVEL)
-    -h, --help                       Print help information
-    -V, --version                    Print version information
-
-SUBCOMMANDS:
-    validate                         Validate configuration files
-    user                            User management commands
-```
-
-### Validation Subcommand
-
-Validate configuration files for syntax and consistency:
-
-```bash
-rust-socksd validate [OPTIONS]
-
-OPTIONS:
-    -c, --config <FILE>              Configuration file to validate [default: config.yml]
-        --user-config <FILE>         User configuration file to validate
-```
-
-Examples:
-
-```bash
-# Validate main configuration
-rust-socksd validate
-
-# Validate specific config files
-rust-socksd validate --config /etc/rust-socksd/config.yml --user-config /etc/rust-socksd/users.yml
-```
-
-### User Management Subcommand
-
-Manage user accounts with secure password hashing:
-
-```bash
-rust-socksd user [OPTIONS] <SUBCOMMAND> [SUBCOMMAND_ARGS]
-
-OPTIONS:
-        --user-config <FILE>         User configuration file path [default: users.yml]
-
-SUBCOMMANDS:
-    init                            Initialize a new user configuration file
-    add                             Add a new user
-    remove                          Remove a user
-    list                            List all users
-    update                          Update user password
-    enable                          Enable/disable a user
-```
-
-#### User Subcommand Details
-
-##### Initialize User Config
-
-```bash
-rust-socksd user [OPTIONS] init [SUB-OPTIONS]
-
-SUB-OPTIONS:
-        --hash-type <TYPE>           Default password hash type: argon2, bcrypt, scrypt [default: argon2]
-```
-
-##### Add User
-
-```bash
-rust-socksd user [OPTIONS] add [SUB-OPTIONS] <USERNAME> [PASSWORD]
-
-ARGUMENTS:
-    <USERNAME>                       Username
-    [PASSWORD]                       Password (will prompt if not provided)
-
-SUB-OPTIONS:
-        --hash-type <TYPE>           Password hash type: argon2, bcrypt, scrypt [default: argon2]
-```
-
-##### Remove User
-
-```bash
-rust-socksd user [OPTIONS] remove <USERNAME>
-
-ARGUMENTS:
-    <USERNAME>                       Username to remove
-```
-
-##### List Users
-
-```bash
-rust-socksd user [OPTIONS] list
-```
-
-##### Update User Password
-
-```bash
-rust-socksd user [OPTIONS] update <USERNAME> [PASSWORD]
-
-ARGUMENTS:
-    <USERNAME>                       Username
-    [PASSWORD]                       New password (will prompt if not provided)
-```
-
-##### Enable/Disable User
-
-```bash
-rust-socksd user [OPTIONS] enable <USERNAME> <ENABLED>
-
-ARGUMENTS:
-    <USERNAME>                       Username
-    <ENABLED>                        Enable (true) or disable (false)
-```
-
-## Environment Variables
-
-rust-socksd supports several environment variables for configuration override:
-
-- **RUST_SOCKSD_BIND_ADDRESS**: Override the bind address (e.g., `0.0.0.0`)
-- **RUST_SOCKSD_SOCKS5_PORT**: Override the SOCKS5 port (e.g., `1080`)
-- **RUST_SOCKSD_HTTP_PORT**: Override the HTTP proxy port (e.g., `8080`)
-- **RUST_SOCKSD_LOG_LEVEL**: Override the log level (`trace`, `debug`, `info`, `warn`, `error`)
-
-These environment variables take precedence over configuration file settings but are overridden by command line arguments.
-
-### Examples
-
-```bash
-# Start with custom bind address and ports
-export RUST_SOCKSD_BIND_ADDRESS="0.0.0.0"
-export RUST_SOCKSD_SOCKS5_PORT="1081"
-export RUST_SOCKSD_HTTP_PORT="8081"
-rust-socksd --config config.yml
-
-# Start with debug logging
-export RUST_SOCKSD_LOG_LEVEL="debug"
-rust-socksd --config config.yml
-
-# Override specific settings via command line (takes highest precedence)
-RUST_SOCKSD_BIND_ADDRESS="0.0.0.0" rust-socksd --socks5-port 1082 --config config.yml
-```
-
-## Docker Support
-
-rust-socksd provides official Docker support with multi-stage builds for optimal security and performance.
-
-### Quick Start with Docker
-
-#### Using Pre-built Image
-
-```bash
-# Pull and run the latest image
-docker run -d \
-  --name rust-socksd \
-  -p 1080:1080 \
-  -p 8080:8080 \
-  quintux/rust-socksd:latest
-```
-
-#### Building from Source
-
-```bash
-# Build the Docker image
-docker build -t rust-socksd .
-
-# Run the container
-docker run -d \
-  --name rust-socksd \
-  -p 1080:1080 \
-  -p 8080:8080 \
-  rust-socksd
-```
-
-### Docker Configuration
-
-#### Using Environment Variables
-
-```bash
-docker run -d \
-  --name rust-socksd \
-  -p 1080:1080 \
-  -p 8080:8080 \
-  -e RUST_SOCKSD_BIND_ADDRESS="0.0.0.0" \
-  -e RUST_SOCKSD_SOCKS5_PORT="1080" \
-  -e RUST_SOCKSD_HTTP_PORT="8080" \
-  -e RUST_SOCKSD_LOG_LEVEL="info" \
-  quintux/rust-socksd:latest
-```
-
-#### Using Custom Configuration Files
-
-```bash
-# Create a directory for configuration files
-mkdir -p ./config
-
-# Generate default configuration
-docker run --rm -v ./config:/config quintux/rust-socksd:latest --generate-config /config/config.yml
-
-# Edit the configuration file
-nano ./config/config.yml
-
-# Run with custom configuration
-docker run -d \
-  --name rust-socksd \
-  -p 1080:1080 \
-  -p 8080:8080 \
-  -v ./config:/config \
-  quintux/rust-socksd:latest --config /config/config.yml
-```
-
-#### Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  rust-socksd:
-    image: quintux/rust-socksd:latest
-    container_name: rust-socksd
-    ports:
-      - "1080:1080"  # SOCKS5 port
-      - "8080:8080"  # HTTP proxy port
-    environment:
-      - RUST_SOCKSD_BIND_ADDRESS=0.0.0.0
-      - RUST_SOCKSD_LOG_LEVEL=info
-    volumes:
-      - ./config:/config  # Optional: mount config directory
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    user: "1001:1001"  # Run as non-root user
-```
-
-### Docker Security Features
-
-The Docker image includes several security enhancements:
-
-- **Multi-stage Build**: Minimal runtime image with only necessary components
-- **Non-root User**: Runs as user `appuser` (UID 1001) for security
-- **Minimal Base**: Uses `debian:bullseye-slim` for reduced attack surface
-- **No Privileges**: Container runs without additional privileges
-- **Exposed Ports**: Only necessary ports (1080, 8080) are exposed
-
-## Systemd Service
-
-The package includes a systemd service file that provides:
-
-- Automatic startup on boot
-- Proper user isolation (runs as `rust-socksd` user)
-- Security hardening (restricted filesystem access, no new privileges)
-- Service restart on failure
-- Proper logging integration
-
-Service management:
-
-```bash
-# Start the service
-sudo systemctl start rust-socksd
-
-# Enable automatic startup
-sudo systemctl enable rust-socksd
-
-# Check status
-sudo systemctl status rust-socksd
-
-# View logs
-sudo journalctl -u rust-socksd -f
-```
-
-## Building Packages
-
-### Debian Package
-
-```bash
-# Install build dependencies
-sudo apt-get install debhelper-compat cargo rustc
-
-# Build the package
-dpkg-buildpackage -b -uc -us
-```
-
-### Arch Package
-
-```bash
-# Build from AUR
-git clone https://aur.archlinux.org/rust-socksd.git
-cd rust-socksd
-makepkg -si
-```
+---
 
 ## Performance
 
-rust-socksd is designed for high performance:
+`rust-socksd` is optimized for low-latency and high-throughput production usage:
 
-- **Async Architecture**: Built on tokio for efficient I/O handling
-- **Zero-copy Operations**: Minimal memory allocations during data transfer
-- **Connection Pooling**: Efficient connection management
-- **Configurable Limits**: Tunable for your specific use case
+* **Async Architecture**: Built on the Tokio runtime for massive concurrent socket handling.
+* **Zero-copy Relay**: Employs optimized I/O looping to minimize CPU overhead and buffer copying.
+* **Minimal Footprint**: Operates with a base memory footprint under ~10MB under idle loads.
+* **Scalable limits**: Supports over 1000+ simultaneous connections out-of-the-box.
 
-Typical performance on modern hardware:
+---
 
-- **Throughput**: 1000+ concurrent connections
-- **Latency**: Sub-millisecond proxy overhead
-- **Memory**: ~10MB base memory usage
+## Build Features
 
-## Security
+The project supports optional compilation features:
 
-Security features include:
+* **`pam-auth`** (default): Enables Pluggable Authentication Modules support (requires `libpam` development headers).
+  * *Note for macOS*: This feature requires LLVM compiler headers (`brew install llvm`) for bindgen. If you experience build errors, build with `--no-default-features` to compile without PAM.
 
-- **Network Restrictions**: Allow/deny lists for source networks
-- **Domain Blocking**: Block access to specific domains
-- **Authentication**: Secure username/password authentication
-- **Rate Limiting**: Prevent abuse and DoS attacks
-- **Service Isolation**: Runs with minimal privileges
-- **Secure Defaults**: Conservative default configuration
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Permission Denied**: Ensure the service user has access to configuration files
-2. **Port Already in Use**: Check if another service is using the same ports
-3. **Connection Refused**: Verify firewall settings and bind address
-4. **Authentication Failures**: Check username/password configuration
-
-### Debugging
-
-Enable debug logging:
-
-```bash
-rust-socksd --config config.yml --verbose
-```
-
-Or set in configuration:
-
-```yaml
-logging:
-  level: "debug"
-```
-
-### Logs
-
-Check system logs:
-
-```bash
-# Systemd service logs
-sudo journalctl -u rust-socksd
-
-# Application logs (if file logging enabled)
-sudo tail -f /var/log/rust-socksd/rust-socksd.log
-```
-
-## Administrative API
-
-`rust-socksd` includes a dedicated, secure HTTP administrative port for liveness probing, Prometheus metrics collection, config schema validation, and runtime hot reloads.
-
-### Configuration
-
-Add the `admin` block in your config:
-```yaml
-admin:
-  enabled: true
-  bind_address: "127.0.0.1"
-  port: 8081
-  token: "my-secure-static-bypass-token" # optional pre-shared bearer token
-  admin_users: ["admin"]                 # users authorized to log in for dynamic tokens
-  token_ttl: 3600                        # TTL for dynamic tokens
-```
-
-*You can also enable/configure the API using CLI flags `--admin-enabled` and `--admin-port <PORT>`, or environment variables `RUST_SOCKSD_ADMIN_ENABLED=true` and `RUST_SOCKSD_ADMIN_PORT=8081`.*
-
-> **Security:** The admin API speaks plaintext HTTP. Bearer tokens and the
-> Basic-auth credentials sent to `POST /login` are therefore not encrypted in
-> transit. Keep `bind_address` on `127.0.0.1` (the default), or place the API
-> behind a TLS-terminating reverse proxy before exposing it beyond localhost.
-
-### Main Endpoints
-
-- **`GET /health`**: Public endpoint returning `{ "status": "ok" }`.
-- **`POST /login`**: Exchange Basic Auth credentials (checked against active authenticators) for a transient admin token.
-- **`GET /metrics`**: Exports prometheus-compatible connection metrics, byte transfer counts, and auth failures.
-- **`GET /config`**: Read the running configuration (sensitive passwords automatically masked).
-- **`POST /config/validate`**: Validate a potential configuration body.
-- **`POST /config/reload`**: Read configuration file on disk and hot reload (recreating upstreams, ACL rules, and authentication backends seamlessly). Note: Port changes require a full process restart.
-
-For details, payload formats, and curl command examples, see the [Admin API Reference Guide](file:///Users/quintus/.gemini/antigravity-cli/brain/4eb6d57b-32e4-420e-9a81-21613a19e2b5/admin_api_reference.md).
-
-## License
-
-This project is licensed under either of
-
-- MIT License ([LICENSE-MIT](LICENSE.MIT))
-- Apache License, Version 2.0 ([LICENSE.Apache-2.0](LICENSE.Apache-2.0))
-
-at your option.
-
-`SPDX-License-Identifier: MIT OR Apache-2.0`
-
-
-### Build Features
-
-The project supports the following Cargo features:
-
-- **pam-auth** (default): Enables PAM authentication backend. Requires `libpam` development headers.
-  - *Note for macOS*: This feature may require `llvm` to be installed (`brew install llvm`) for `bindgen`. If you encounter build errors, you can disable this feature.
-
-To build without PAM support:
+To compile without PAM support:
 ```bash
 cargo build --release --no-default-features
 ```
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+---
 
-## Support
+## License
 
-For issues, questions, or feature requests, please visit our [GitHub Issues](https://github.com/quintusl/rust-socksd/issues) page.
+This project is licensed under either of:
+* MIT License ([LICENSE-MIT](LICENSE.MIT))
+* Apache License, Version 2.0 ([LICENSE-Apache-2.0](LICENSE.Apache-2.0))
+
+at your option.
+
+`SPDX-License-Identifier: MIT OR Apache-2.0`
