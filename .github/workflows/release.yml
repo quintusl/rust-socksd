@@ -91,32 +91,34 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            qemu_arch: x86_64
+            target: x86_64-unknown-linux-gnu
           - arch: arm64
-            qemu_arch: aarch64
+            target: aarch64-unknown-linux-gnu
           - arch: armhf
-            qemu_arch: armv7
+            target: armv7-unknown-linux-gnueabihf
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Debian Package on ${{ matrix.arch }}
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: ${{ matrix.qemu_arch }}
-          distro: bookworm
-          githubToken: ${{ github.token }}
-          install: |
-            apt-get update
-            apt-get install -y build-essential debhelper libssl-dev libpam0g-dev pkg-config curl git
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          run: |
-            source $HOME/.cargo/env
-            # Create a subdirectory for the build to ensure artifacts land in the workspace root (dpkg-buildpackage outputs to ../)
-            mkdir -p package-build
-            cp -r . package-build/
-            cd package-build
-            # Build the package (skip dependency check -d because we installed cargo via rustup)
-            dpkg-buildpackage -b -uc -us -d
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-binstall
+        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+      - name: Install cross via cargo-binstall
+        run: cargo binstall --no-confirm cross
+
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper dpkg-dev
+
+      - name: Build Debian Package for ${{ matrix.arch }}
+        run: |
+          mkdir -p package-build
+          rsync -a --exclude=package-build --exclude=target . package-build/
+          cd package-build
+          USE_CROSS=1 CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
       
       - name: Upload Debian package to release
         env:

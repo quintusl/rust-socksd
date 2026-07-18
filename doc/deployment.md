@@ -71,6 +71,25 @@ dpkg-buildpackage -b -uc -us
 
 This generates a `.deb` package in the parent directory, which you can install via `dpkg -i`.
 
+### Cross-Compiling Debian Packages
+
+You can also cross-compile Debian packages using `cross-rs` (which runs compilation inside Docker container with target toolchains and libraries).
+
+1. Install `cross`:
+   ```bash
+   cargo install cross --git https://github.com/cross-rs/cross
+   ```
+
+2. Run `dpkg-buildpackage` specifying `USE_CROSS=1`, the Rust target triple, and the Debian architecture:
+   ```bash
+   # Build for ARM64 (aarch64)
+   USE_CROSS=1 CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu dpkg-buildpackage -b -uc -us -d -aarm64
+
+   # Build for ARMv7 (armhf)
+   USE_CROSS=1 CARGO_BUILD_TARGET=armv7-unknown-linux-gnueabihf dpkg-buildpackage -b -uc -us -d -aarmhf
+   ```
+
+
 ---
 
 ## Arch Linux Package (AUR)
