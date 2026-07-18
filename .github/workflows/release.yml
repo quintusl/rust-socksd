@@ -112,12 +112,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y debhelper dpkg-dev
+          # Install runtime libraries for dpkg-shlibdeps dependency resolution
+          sudo apt-get install -y libssl3 libpam0g
 
       - name: Build Debian Package for ${{ matrix.arch }}
         run: |
           mkdir -p package-build
           rsync -a --exclude=package-build --exclude=target . package-build/
           cd package-build
+          # For cross-compilation, also install cross-compile variants
+          if [ "${{ matrix.arch }}" != "amd64" ]; then
+            sudo dpkg --add-architecture ${{ matrix.arch }}
+            sudo apt-get update
+            sudo apt-get install -y libssl3:${{ matrix.arch }} libpam0g:${{ matrix.arch }}
+          fi
           USE_CROSS=1 CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
       
       - name: Upload Debian package to release
