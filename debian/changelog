@@ -1,3 +1,15 @@
+rust-socksd (0.3.0-1) unstable; urgency=medium
+
+  * Update debian build
+  * Security update assisted by Claude Fable 5
+  * Admin and metrics API endpoints.
+  * Merge pull request #2 from jorti/container-entrypoint
+  * Use entrypoint in container image
+  * New config optons for egress allowed / blocked networks.
+  * Support upstream proxy.
+
+ -- Quintus Leung <quintusl@gmail.com>  Sat, 18 Jul 2026 17:29:05 +0100
+
 rust-socksd (0.2.0-1) unstable; urgency=medium
 
   * Add changelog script.
