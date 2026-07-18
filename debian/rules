@@ -58,4 +58,4 @@ override_dh_makeshlibs:
 	# Skip makeshlibs for binary packages (not a library)
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a
+	# Skip shlibdeps for Rust binary (dependency tracking handled by Rust build system)
