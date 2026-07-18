@@ -114,6 +114,8 @@ jobs:
           sudo apt-get install -y debhelper dpkg-dev
           # Install runtime libraries for dpkg-shlibdeps dependency resolution
           sudo apt-get install -y libssl3 libpam0g
+          # Install cross-compilation tools for all architectures
+          sudo apt-get install -y binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf
 
       - name: Build Debian Package for ${{ matrix.arch }}
         run: |

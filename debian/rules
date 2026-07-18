@@ -55,4 +55,4 @@ override_dh_strip:
 	dh_strip --exclude=rust-socksd
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a -l/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+	dh_shlibdeps -a
