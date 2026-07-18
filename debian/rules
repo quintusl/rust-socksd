@@ -54,5 +54,8 @@ override_dh_auto_test:
 override_dh_strip:
 	dh_strip --exclude=rust-socksd
 
+override_dh_makeshlibs:
+	# Skip makeshlibs for binary packages (not a library)
+
 override_dh_shlibdeps:
 	dh_shlibdeps -a
