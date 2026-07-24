@@ -15,6 +15,11 @@ endif
 %:
 	dh $@
 
+override_dh_auto_configure:
+	. "$$HOME/.cargo/env" || true
+	rustup update stable
+	rustup target add $(CARGO_BUILD_TARGET) || true
+
 override_dh_auto_build:
 ifdef USE_CROSS
   ifdef CARGO_BUILD_TARGET

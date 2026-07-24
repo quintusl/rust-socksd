@@ -109,23 +109,31 @@ jobs:
             build-essential \
             debhelper \
             dpkg-dev \
-            cargo \
-            rustc \
             pkg-config \
             libssl-dev \
             libpam0g-dev \
             git \
-            ca-certificates
+            ca-certificates \
+            curl
           # For cross-compilation support
           if [ "${{ matrix.arch }}" != "amd64" ]; then
             apt-get install -y --no-install-recommends \
               crossbuild-essential-${{ matrix.arch }}
           fi
 
+      - name: Install Rust via rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          . "$HOME/.cargo/env"
+          rustup update stable
+          rustup toolchain install stable
+          rustup target add ${{ matrix.target }}
+
       - uses: actions/checkout@v4
 
       - name: Build Debian Package for ${{ matrix.arch }}
         run: |
+          . "$HOME/.cargo/env"
           rm -rf package-build
           mkdir -p package-build
           ls -1 | grep -v package-build | xargs -I {} cp -r --no-preserve=mode {} package-build/
