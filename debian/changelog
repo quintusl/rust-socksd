@@ -1,3 +1,11 @@
+rust-socksd (0.3.2-1) unstable; urgency=medium
+
+  * Github Actions build deb on Debian instead of Ubuntu.
+  * Update CHANGELOG.md
+  * Update CHANGELOG.md
+
+ -- Quintus Leung <quintusl@gmail.com>  Fri, 24 Jul 2026 20:15:01 +0100
+
 rust-socksd (0.3.1-1) unstable; urgency=medium
 
   * Debian 13 trixie compatibility.

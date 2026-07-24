@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.2 - 2026-07-24
+
+### Commits
+
+- Github Actions build deb on Debian instead of Ubuntu. (cc455f3)
+- Update CHANGELOG.md (36283f4)
+- Update CHANGELOG.md (cfc6475)
+
+
+
 ## v0.3.1 - 2026-07-24
 
 ### Commits
