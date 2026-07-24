@@ -6,7 +6,6 @@
 
 - Github Actions build deb on Debian instead of Ubuntu. (cc455f3)
 - Update CHANGELOG.md (36283f4)
-- Update CHANGELOG.md (cfc6475)
 
 
 
