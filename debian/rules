@@ -29,7 +29,7 @@ ifdef USE_CROSS
   endif
 else
   ifdef CARGO_BUILD_TARGET
-	cargo build --release --target $(CARGO_BUILD_TARGET)
+	cargo build --release --target $(CARGO_BUILD_TARGET) --no-default-features
   else
 	cargo build --release
   endif
