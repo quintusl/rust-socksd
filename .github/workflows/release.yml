@@ -117,9 +117,20 @@ jobs:
             curl \
             gh
           # For cross-compilation support
-          if [ "${{ matrix.arch }}" != "amd64" ]; then
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            dpkg --add-architecture arm64
+            apt-get update
             apt-get install -y --no-install-recommends \
-              crossbuild-essential-${{ matrix.arch }}
+              crossbuild-essential-arm64 \
+              libssl-dev:arm64 \
+              libpam0g-dev:arm64
+          elif [ "${{ matrix.arch }}" = "armhf" ]; then
+            dpkg --add-architecture armhf
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              crossbuild-essential-armhf \
+              libssl-dev:armhf \
+              libpam0g-dev:armhf
           fi
 
       - name: Install Rust via rustup
@@ -133,6 +144,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Debian Package for ${{ matrix.arch }}
+        env:
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+          AR_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+          PKG_CONFIG_ALLOW_CROSS: "1"
         run: |
           . "$HOME/.cargo/env"
           rm -rf package-build
@@ -142,14 +161,16 @@ jobs:
           
           # Set up cross-compilation environment
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+            export OPENSSL_DIR=/usr
+            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+            export OPENSSL_INCLUDE_DIR=/usr/include
             export DEB_BUILD_MAINT_OPTIONS="hardening=-branch"
           elif [ "${{ matrix.arch }}" = "armhf" ]; then
-            export CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
-            export AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
-            export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
+            export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
+            export OPENSSL_DIR=/usr
+            export OPENSSL_LIB_DIR=/usr/lib/arm-linux-gnueabihf
+            export OPENSSL_INCLUDE_DIR=/usr/include
             export DEB_BUILD_MAINT_OPTIONS="hardening=-branch"
           fi
           
@@ -160,6 +181,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.create_gh_release.outputs.tag_name }}
         run: |
+          git config --global --add safe.directory /__w/rust-socksd/rust-socksd
           # Find the .deb file in the workspace root (parent of package-build)
           DEB_PATH=$(find . -maxdepth 1 -name "*_${{ matrix.arch }}.deb" -print -quit)
           if [ -z "$DEB_PATH" ]; then
