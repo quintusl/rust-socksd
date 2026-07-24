@@ -81,7 +81,7 @@ jobs:
           gh release upload ${{ needs.create_gh_release.outputs.tag_name }} "${{ env.ARCHIVE_PATH }}"
 
   build_debian_packages:
-    name: Build Debian Package
+    name: Build Debian Package (${{ matrix.arch }})
     runs-on: ubuntu-latest
     needs: create_gh_release
     permissions:
@@ -92,35 +92,44 @@ jobs:
         include:
           - arch: amd64
             target: x86_64-unknown-linux-gnu
+            container_image: debian:trixie
           - arch: arm64
             target: aarch64-unknown-linux-gnu
+            container_image: debian:trixie
           - arch: armhf
             target: armv7-unknown-linux-gnueabihf
+            container_image: debian:trixie
+    container:
+      image: ${{ matrix.container_image }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-binstall
-        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-      - name: Install cross via cargo-binstall
-        run: cargo binstall --no-confirm cross
-
-      - name: Install Debian packaging tools
+      - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y debhelper dpkg-dev
-          # Install cross-compilation tools for all architectures
-          sudo apt-get install -y binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            debhelper \
+            dpkg-dev \
+            cargo \
+            rustc \
+            pkg-config \
+            libssl-dev \
+            libpam0g-dev \
+            git \
+            ca-certificates
+          # For cross-compilation support
+          if [ "${{ matrix.arch }}" != "amd64" ]; then
+            apt-get install -y --no-install-recommends \
+              crossbuild-essential-${{ matrix.arch }}
+          fi
+
+      - uses: actions/checkout@v4
 
       - name: Build Debian Package for ${{ matrix.arch }}
         run: |
           mkdir -p package-build
-          rsync -a --exclude=package-build --exclude=target . package-build/
+          cp -r . package-build/
           cd package-build
-          USE_CROSS=1 CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
+          CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
 
       - name: Upload Debian package to release
         env:
