@@ -126,8 +126,9 @@ jobs:
 
       - name: Build Debian Package for ${{ matrix.arch }}
         run: |
+          rm -rf package-build
           mkdir -p package-build
-          cp -r . package-build/
+          cp -r . package-build/ --no-preserve=mode
           cd package-build
           CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
 
