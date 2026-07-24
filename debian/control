@@ -10,7 +10,7 @@ Vcs-Browser: https://github.com/quintusl/rust-socksd
 
 Package: rust-socksd
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, libssl3
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, libssl3t64
 Recommends: systemd
 Description: High-performance SOCKS5 and HTTP proxy server
  rust-socksd is a modern, high-performance proxy server written in Rust

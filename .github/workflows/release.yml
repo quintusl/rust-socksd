@@ -121,7 +121,7 @@ jobs:
           rsync -a --exclude=package-build --exclude=target . package-build/
           cd package-build
           USE_CROSS=1 CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
-      
+
       - name: Upload Debian package to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
