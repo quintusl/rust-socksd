@@ -128,7 +128,7 @@ jobs:
         run: |
           rm -rf package-build
           mkdir -p package-build
-          cp -r . package-build/ --no-preserve=mode
+          ls -1 | grep -v package-build | xargs -I {} cp -r --no-preserve=mode {} package-build/
           cd package-build
           CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
 
