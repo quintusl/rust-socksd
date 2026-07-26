@@ -1,46 +1,13 @@
 #!/usr/bin/make -f
 
-include /usr/share/dpkg/architecture.mk
-
-ifndef CARGO_BUILD_TARGET
-  ifeq ($(DEB_HOST_ARCH),amd64)
-    CARGO_BUILD_TARGET = x86_64-unknown-linux-gnu
-  else ifeq ($(DEB_HOST_ARCH),arm64)
-    CARGO_BUILD_TARGET = aarch64-unknown-linux-gnu
-  else ifeq ($(DEB_HOST_ARCH),armhf)
-    CARGO_BUILD_TARGET = armv7-unknown-linux-gnueabihf
-  endif
-endif
-
 %:
 	dh $@
 
-override_dh_auto_configure:
-	. "$$HOME/.cargo/env" || true
-	rustup update stable
-	rustup target add $(CARGO_BUILD_TARGET) || true
-
 override_dh_auto_build:
-ifdef USE_CROSS
-  ifdef CARGO_BUILD_TARGET
-	cross build --release --target $(CARGO_BUILD_TARGET)
-  else
-	cross build --release
-  endif
-else
-  ifdef CARGO_BUILD_TARGET
-	cargo build --release --target $(CARGO_BUILD_TARGET) --no-default-features
-  else
 	cargo build --release
-  endif
-endif
 
 override_dh_auto_install:
-ifdef CARGO_BUILD_TARGET
-	install -D -m755 target/$(CARGO_BUILD_TARGET)/release/rust-socksd debian/rust-socksd/usr/bin/rust-socksd
-else
 	install -D -m755 target/release/rust-socksd debian/rust-socksd/usr/bin/rust-socksd
-endif
 	install -D -m644 config/rust-socksd.service debian/rust-socksd/lib/systemd/system/rust-socksd.service
 	install -D -m644 config/rust-socksd.sysusers.conf debian/rust-socksd/usr/lib/sysusers.d/rust-socksd.conf
 	install -D -m640 config/config.yml.journald.example debian/rust-socksd/etc/rust-socksd/config.yml
