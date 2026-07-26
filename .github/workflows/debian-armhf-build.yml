@@ -36,6 +36,8 @@ jobs:
             debhelper \
             dpkg-dev \
             pkg-config \
+            curl \
+            gh \
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
             libc6-dev-armhf-cross \
