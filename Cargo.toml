@@ -1,6 +1,6 @@
 [package]
 name = "rust-socksd"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2021"
 description = "A high-performance SOCKS5 and HTTP proxy server written in Rust"
 authors = ["Quintus Leung <quintusl@gmail.com>"]

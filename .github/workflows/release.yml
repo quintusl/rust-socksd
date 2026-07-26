@@ -82,7 +82,7 @@ jobs:
 
   build_debian_packages:
     name: Build Debian Package (${{ matrix.arch }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
     needs: create_gh_release
     permissions:
       contents: write
@@ -91,13 +91,13 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
             container_image: debian:trixie
           - arch: arm64
-            target: aarch64-unknown-linux-gnu
+            runs-on: ubuntu-latest-arm64
             container_image: debian:trixie
           - arch: armhf
-            target: armv7-unknown-linux-gnueabihf
+            runs-on: ubuntu-latest-arm
             container_image: debian:trixie
     container:
       image: ${{ matrix.container_image }}
@@ -116,22 +116,6 @@ jobs:
             ca-certificates \
             curl \
             gh
-          # For cross-compilation support
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            dpkg --add-architecture arm64
-            apt-get update
-            apt-get install -y --no-install-recommends \
-              crossbuild-essential-arm64 \
-              libssl-dev:arm64 \
-              libpam0g-dev:arm64
-          elif [ "${{ matrix.arch }}" = "armhf" ]; then
-            dpkg --add-architecture armhf
-            apt-get update
-            apt-get install -y --no-install-recommends \
-              crossbuild-essential-armhf \
-              libssl-dev:armhf \
-              libpam0g-dev:armhf
-          fi
 
       - name: Install Rust via rustup
         run: |
@@ -139,44 +123,17 @@ jobs:
           . "$HOME/.cargo/env"
           rustup update stable
           rustup toolchain install stable
-          rustup target add ${{ matrix.target }}
 
       - uses: actions/checkout@v4
 
       - name: Build Debian Package for ${{ matrix.arch }}
-        env:
-          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-          AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-          AR_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
-          PKG_CONFIG_ALLOW_CROSS: "1"
         run: |
           . "$HOME/.cargo/env"
           rm -rf package-build
           mkdir -p package-build
           ls -1 | grep -v package-build | xargs -I {} cp -r --no-preserve=mode {} package-build/
           cd package-build
-          
-          # Set up cross-compilation environment
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-            export OPENSSL_DIR=/usr
-            export OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
-            export OPENSSL_INCLUDE_DIR=/usr/include
-            export DEB_BUILD_MAINT_OPTIONS="hardening=-branch"
-            CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
-          elif [ "${{ matrix.arch }}" = "armhf" ]; then
-            export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
-            export OPENSSL_DIR=/usr
-            export OPENSSL_LIB_DIR=/usr/lib/arm-linux-gnueabihf
-            export OPENSSL_INCLUDE_DIR=/usr/include
-            export DEB_BUILD_MAINT_OPTIONS="hardening=-branch"
-            CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
-          else
-            CARGO_BUILD_TARGET=${{ matrix.target }} dpkg-buildpackage -b -uc -us -d -a${{ matrix.arch }}
-          fi
+          dpkg-buildpackage -b -uc -us
 
       - name: Upload Debian package to release
         env:
