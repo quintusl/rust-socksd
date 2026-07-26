@@ -3,3 +3,7 @@
 
 [http]
 proxy = "" # leaving this as a blank string resets proxy to default
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"
+ar = "arm-linux-gnueabihf-ar"

@@ -10,6 +10,8 @@ jobs:
   build_debian_armhf:
     name: Build Debian Package (armhf)
     runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
     permissions:
       contents: write
     steps:
@@ -26,8 +28,10 @@ jobs:
 
       - name: Install cross-compilation toolchain for armhf
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update
+          dpkg --add-architecture armhf
+          apt-get update
+          apt-get install -y --no-install-recommends \
             build-essential \
             debhelper \
             dpkg-dev \
