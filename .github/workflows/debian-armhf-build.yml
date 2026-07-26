@@ -32,6 +32,8 @@ jobs:
           dpkg --add-architecture armhf
           apt-get update
           apt-get install -y --no-install-recommends \
+            git \
+            ca-certificates \
             build-essential \
             debhelper \
             dpkg-dev \
