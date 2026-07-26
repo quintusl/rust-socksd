@@ -1,0 +1,68 @@
+name: Build armhf Debian Package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-armhf:
+    name: Build armhf Debian Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Install QEMU static binaries so Docker can run ARM containers
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 2. Run the build inside an arm32v7 (armhf) Debian container
+      - name: Build Debian package
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            arm32v7/debian:trixie \
+            /bin/bash -c "
+              # Update and install build dependencies
+              apt-get update && 
+              apt-get install -y --no-install-recommends \
+                build-essential \
+                debhelper \
+                dpkg-dev \
+                pkg-config \
+                libssl-dev \
+                libpam0g-dev \
+                devscripts \
+                equivs \
+                git \
+                ca-certificates \
+                curl
+
+              # Automatically install dependencies listed in debian/control
+              mk-build-deps --install --remove --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y' debian/control
+
+              # Build the package (unsigned source, unsigned changes, binary-only)
+              dpkg-buildpackage -us -uc -b
+
+              # Move the resulting .deb files into a specific folder for uploading
+              mkdir -p /workspace/output
+              mv ../*.deb /workspace/output/ || true
+            "
+
+      # 3. Upload the compiled .deb file to the release
+      - name: Upload armhf package to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the .deb file
+          DEB_FILE=$(find output -name "*_armhf.deb" -o -name "*_arm*.deb" | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::Could not find .deb package for armhf"
+            ls -la output/ || true
+            exit 1
+          fi
+          echo "Found deb package: $DEB_FILE"
+          gh release upload ${{ github.event.release.tag_name }} "$DEB_FILE"
