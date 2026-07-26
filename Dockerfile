@@ -1,6 +1,6 @@
 # Stage 1: Build the application
 # Use a specific Rust version for reproducibility, slim variant for smaller base
-FROM rust:1.88-slim-bookworm AS builder
+FROM rust:1.97.0-slim-trixie AS builder
 LABEL maintainer="Quintus Leung"
 
 # Install system dependencies if needed by any crates (e.g., libssl-dev, pkg-config for TLS/crypto)
@@ -31,7 +31,7 @@ RUN touch src/main.rs
 RUN cargo build --release --locked
 
 # Stage 2: Create the final lightweight image
-FROM debian:bookworm-slim AS runner
+FROM debian:trixie-slim AS runner
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y libssl3 libpam0g && rm -rf /var/lib/apt/lists/*

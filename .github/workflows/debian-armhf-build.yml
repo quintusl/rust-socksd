@@ -1,0 +1,96 @@
+name: Build Debian Package (armhf) with QEMU
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build_debian_armhf:
+    name: Build Debian Package (armhf)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm/v7
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version and package name
+        id: get_version
+        run: |
+          export PKG_NAME=$(grep -A 10 '\[package\]' Cargo.toml | grep '^name *=' | sed 's/name *= *"\(.*\)"/\1/')
+          export VERSION=$(grep -A 10 '\[package\]' Cargo.toml | grep '^version *=' | sed 's/version *= *"\(.*\)"/\1/')
+          echo "pkg_name=${PKG_NAME}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build Debian Package for armhf using Docker
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            debian:trixie-slim \
+            /bin/bash -c '
+              set -e
+              echo "Building on $(uname -m)"
+              
+              # Update and install build dependencies
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential \
+                debhelper \
+                dpkg-dev \
+                pkg-config \
+                libssl-dev \
+                libpam0g-dev \
+                git \
+                ca-certificates \
+                curl
+              
+              # Install Rust via rustup
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+              . "$HOME/.cargo/env"
+              rustup update stable
+              rustup toolchain install stable
+              
+              # Build the Debian package
+              rm -rf package-build
+              mkdir -p package-build
+              ls -1 | grep -v package-build | xargs -I {} cp -r --no-preserve=mode {} package-build/
+              cd package-build
+              dpkg-buildpackage -b -uc -us
+              
+              # Copy the built package back to workspace root
+              cd /workspace
+              mv package-build/../rust-socksd*.deb . 2>/dev/null || true
+              ls -la *.deb || echo "No .deb files found"
+            '
+
+      - name: Upload Debian package to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          # Find the .deb file for armhf
+          DEB_PATH=$(find . -maxdepth 1 -name "*_armhf.deb" -print -quit)
+          if [ -z "$DEB_PATH" ]; then
+            echo "::error::Could not find .deb package for armhf"
+            ls -l
+            exit 1
+          fi
+          echo "Found deb package: $DEB_PATH"
+          gh release upload ${{ env.TAG_NAME }} "$DEB_PATH"
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-armhf-package
+          path: "*.deb"
+          retention-days: 30
