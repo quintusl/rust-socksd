@@ -63,6 +63,7 @@ jobs:
           CXX: arm-linux-gnueabihf-g++
           AR: arm-linux-gnueabihf-ar
           PKG_CONFIG_PATH: /usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
+          CFLAGS_armv7_unknown_linux_gnueabihf: "-g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/__w/rust-socksd/rust-socksd=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security"
         run: |
           set -e
           echo "Building for: $(dpkg-architecture -A armhf -q DEB_HOST_GNU_TYPE)"
