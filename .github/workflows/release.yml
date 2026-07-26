@@ -94,10 +94,7 @@ jobs:
             runs-on: ubuntu-latest
             container_image: debian:trixie
           - arch: arm64
-            runs-on: ubuntu-latest-arm64
-            container_image: debian:trixie
-          - arch: armhf
-            runs-on: ubuntu-latest-arm
+            runs-on: ubuntu-24.04-arm
             container_image: debian:trixie
     container:
       image: ${{ matrix.container_image }}
