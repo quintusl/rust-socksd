@@ -13,11 +13,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm/v7
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -29,47 +24,42 @@ jobs:
           echo "pkg_name=${PKG_NAME}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Build Debian Package for armhf using Docker
+      - name: Install cross-compilation toolchain for armhf
         run: |
-          docker run --rm --platform linux/arm/v7 \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            debian:trixie-slim \
-            /bin/bash -c '
-              set -e
-              echo "Building on $(uname -m)"
-              
-              # Update and install build dependencies
-              apt-get update
-              apt-get install -y --no-install-recommends \
-                build-essential \
-                debhelper \
-                dpkg-dev \
-                pkg-config \
-                libssl-dev \
-                libpam0g-dev \
-                git \
-                ca-certificates \
-                curl
-              
-              # Install Rust via rustup
-              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-              . "$HOME/.cargo/env"
-              rustup update stable
-              rustup toolchain install stable
-              
-              # Build the Debian package
-              rm -rf package-build
-              mkdir -p package-build
-              ls -1 | grep -v package-build | xargs -I {} cp -r --no-preserve=mode {} package-build/
-              cd package-build
-              dpkg-buildpackage -b -uc -us
-              
-              # Copy the built package back to workspace root
-              cd /workspace
-              mv package-build/../rust-socksd*.deb . 2>/dev/null || true
-              ls -la *.deb || echo "No .deb files found"
-            '
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            debhelper \
+            dpkg-dev \
+            pkg-config \
+            gcc-arm-linux-gnueabihf \
+            g++-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross \
+            libssl-dev:armhf \
+            libpam0g-dev:armhf \
+            crossbuild-essential-armhf
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: armv7-unknown-linux-gnueabihf
+
+      - name: Build Debian Package for armhf
+        env:
+          DEB_BUILD_GNU_TYPE: arm-linux-gnueabihf
+          DEB_HOST_GNU_TYPE: arm-linux-gnueabihf
+          DEB_HOST_ARCH: armhf
+          CARGO_BUILD_TARGET: armv7-unknown-linux-gnueabihf
+          RUSTFLAGS: "-C linker=arm-linux-gnueabihf-gcc"
+          CC: arm-linux-gnueabihf-gcc
+          CXX: arm-linux-gnueabihf-g++
+          AR: arm-linux-gnueabihf-ar
+          PKG_CONFIG_PATH: /usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
+        run: |
+          set -e
+          echo "Building for: $(dpkg-architecture -A armhf -q DEB_HOST_GNU_TYPE)"
+          dpkg-buildpackage -b -uc -us -a armhf
+          ls -la *.deb || echo "::warning::No .deb files found"
 
       - name: Upload Debian package to release
         if: startsWith(github.ref, 'refs/tags/')
