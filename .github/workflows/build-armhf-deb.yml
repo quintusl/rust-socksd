@@ -1,8 +1,9 @@
 name: Build armhf Debian Package
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0, v1.2.3, etc.
 
 jobs:
   build-armhf:
