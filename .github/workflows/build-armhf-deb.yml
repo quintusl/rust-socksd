@@ -8,7 +8,7 @@ on:
 jobs:
   build-armhf:
     name: Build armhf Debian Package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
     steps:
@@ -31,7 +31,7 @@ jobs:
             debian:trixie \
             /bin/bash -c "
               # Update and install build dependencies (matching amd64 build)
-              apt-get update && 
+              apt-get update &&
               apt-get install -y --no-install-recommends \
                 build-essential \
                 debhelper \
@@ -66,6 +66,7 @@ jobs:
       - name: Upload armhf package to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           # Find the .deb file
           DEB_FILE=$(find output -name "*_armhf.deb" -o -name "*_arm*.deb" | head -1)
@@ -75,4 +76,8 @@ jobs:
             exit 1
           fi
           echo "Found deb package: $DEB_FILE"
-          gh release upload ${{ github.event.release.tag_name }} "$DEB_FILE"
+          if [ -z "$TAG_NAME" ]; then
+            echo "::error::TAG_NAME is empty"
+            exit 1
+          fi
+          gh release upload "$TAG_NAME" "$DEB_FILE"
