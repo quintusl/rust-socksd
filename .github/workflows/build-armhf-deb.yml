@@ -18,16 +18,19 @@ jobs:
       # 1. Install QEMU static binaries so Docker can run ARM containers
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm,arm64
 
-      # 2. Run the build inside an arm32v7 (armhf) Debian container
+      # 2. Run the build inside an armhf Debian container with proper platform support
       - name: Build Debian package
         run: |
           docker run --rm \
+            --platform linux/arm/v7 \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            arm32v7/debian:trixie \
+            debian:trixie \
             /bin/bash -c "
-              # Update and install build dependencies
+              # Update and install build dependencies (matching amd64 build)
               apt-get update && 
               apt-get install -y --no-install-recommends \
                 build-essential \
